@@ -1,0 +1,16 @@
+spring:
+  config:
+    import: optional:file:.env[.properties],optional:file:backend/.env[.properties]
+
+app:
+  public-base-url: ${APP_PUBLIC_BASE_URL:${app.base-url:http://localhost:8080}}
+
+ai:
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+    model: ${OPENAI_MODEL:gpt-4o-mini}
+    timeout-ms: ${OPENAI_TIMEOUT_MS:5000}
+    max-tokens: ${OPENAI_MAX_TOKENS:256}
+  image-url:
+    signing-secret: ${AI_IMAGE_SIGNING_SECRET:}
+    ttl-seconds: ${AI_IMAGE_URL_TTL_SECONDS:600}

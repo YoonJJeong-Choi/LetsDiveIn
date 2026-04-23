@@ -1,0 +1,119 @@
+import fetch from 'auth/FetchInterceptor'
+
+const ReviewService = {}
+
+/**
+ * 전체 리뷰 목록 조회 (관리자/파트너용) - 서버 페이지네이션
+ * @param {{page?: number, size?: number}} params
+ * @returns {Promise<{items: any[], total: number, page: number, size: number}>}
+ */
+ReviewService.getAllReviews = function (params = {}) {
+	const qp = { ...params };
+	if (qp.page !== undefined && qp.page !== null) {
+		qp.page = Math.max(0, Number(qp.page) - 1);
+	}
+	return fetch({
+		url: '/reviews',
+		method: 'get',
+		params: qp
+	})
+}
+
+/**
+ * 리뷰 상세 조회
+ * @param {Number} reviewNo - 리뷰 번호
+ * @returns {Promise} 리뷰 상세 정보
+ */
+ReviewService.getReview = function (reviewNo) {
+	return fetch({
+		url: `/reviews/${reviewNo}`,
+		method: 'get'
+	})
+}
+
+/**
+ * 상품별 리뷰 목록 조회
+ * @param {Number} productNo - 상품 번호
+ * @returns {Promise} 리뷰 목록
+ */
+ReviewService.getReviewsByProduct = function (productNo) {
+	return fetch({
+		url: `/reviews/product/${productNo}`,
+		method: 'get'
+	})
+}
+
+/**
+ * 리뷰 삭제 (관리자만)
+ * @param {Number} reviewNo - 리뷰 번호
+ * @returns {Promise}
+ */
+ReviewService.deleteReview = function (reviewNo) {
+	return fetch({
+		url: `/reviews/${reviewNo}`,
+		method: 'delete'
+	})
+}
+
+/**
+ * 파트너 리뷰 목록 조회 (파트너의 상품 리뷰만) - 서버 페이지네이션
+ * @param {{page?: number, size?: number}} params
+ * @returns {Promise<{items: any[], total: number, page: number, size: number}>}
+ */
+ReviewService.getReviewsByPartner = function (params = {}) {
+	const qp = { ...params };
+	if (qp.page !== undefined && qp.page !== null) {
+		qp.page = Math.max(0, Number(qp.page) - 1);
+	}
+	return fetch({
+		url: '/reviews/partner',
+		method: 'get',
+		params: qp
+	})
+}
+
+/**
+ * 리뷰 답변 작성 (파트너만)
+ * @param {Number} reviewNo - 리뷰 번호
+ * @param {String} reviewReply - 답변 내용
+ * @returns {Promise} 리뷰 정보
+ */
+ReviewService.addReviewReply = function (reviewNo, reviewReply) {
+	return fetch({
+		url: `/reviews/${reviewNo}/reply`,
+		method: 'post',
+		data: {
+			reviewReply: reviewReply
+		}
+	})
+}
+
+/**
+ * 리뷰 답변 수정 (파트너만)
+ * @param {Number} reviewNo - 리뷰 번호
+ * @param {String} reviewReply - 답변 내용
+ * @returns {Promise} 리뷰 정보
+ */
+ReviewService.updateReviewReply = function (reviewNo, reviewReply) {
+	return fetch({
+		url: `/reviews/${reviewNo}/reply`,
+		method: 'put',
+		data: {
+			reviewReply: reviewReply
+		}
+	})
+}
+
+/**
+ * 리뷰 답변 삭제 (파트너만)
+ * @param {Number} reviewNo - 리뷰 번호
+ * @returns {Promise} 리뷰 정보
+ */
+ReviewService.deleteReviewReply = function (reviewNo) {
+	return fetch({
+		url: `/reviews/${reviewNo}/reply`,
+		method: 'delete'
+	})
+}
+
+export default ReviewService
