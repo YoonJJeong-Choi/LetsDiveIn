@@ -44,8 +44,8 @@ npm install && npm start
 
 ```
 swim-mall/
-├── customer-frontend/web/   # 고객용 Next.js
-├── admin-frontend/          # 관리자·파트너 CRA
+├── customer-frontend/web/   # 고객용
+├── admin-frontend/          # 관리자·파트너
 └── backend/                 # Spring Boot API + docs/
 ```
 
