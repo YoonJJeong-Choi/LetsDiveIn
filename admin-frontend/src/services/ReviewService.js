@@ -2,6 +2,23 @@ import fetch from 'auth/FetchInterceptor'
 
 const ReviewService = {}
 
+/** Spring @RequestParam List<Long> optionNos 에 맞춤: optionNos=1&optionNos=2 (axios 기본 optionNos[]=… 는 바인딩 실패 가능) */
+function serializePartnerAiCandidatesParams(params) {
+	const parts = []
+	if (params.productNo != null && params.productNo !== '') {
+		parts.push(`productNo=${encodeURIComponent(params.productNo)}`)
+	}
+	if (Array.isArray(params.optionNos) && params.optionNos.length > 0) {
+		params.optionNos.forEach((n) => {
+			if (n != null && n !== '') parts.push(`optionNos=${encodeURIComponent(n)}`)
+		})
+	}
+	if (params.fromAt) parts.push(`fromAt=${encodeURIComponent(params.fromAt)}`)
+	if (params.toAt) parts.push(`toAt=${encodeURIComponent(params.toAt)}`)
+	if (params.limit != null && params.limit !== '') parts.push(`limit=${encodeURIComponent(params.limit)}`)
+	return parts.join('&')
+}
+
 /**
  * 전체 리뷰 목록 조회 (관리자/파트너용) - 서버 페이지네이션
  * @param {{page?: number, size?: number}} params
@@ -69,6 +86,23 @@ ReviewService.getReviewsByPartner = function (params = {}) {
 		url: '/reviews/partner',
 		method: 'get',
 		params: qp
+	})
+}
+
+/**
+ * 파트너 리뷰 AI 분석용: 상품·옵션·기간 기준 최신 N건 후보 (DB 직접 조회)
+ * @param {{ productNo: number, optionNos?: number[], fromAt?: string, toAt?: string, limit?: number }} params
+ */
+ReviewService.getPartnerReviewAiCandidates = function (params = {}) {
+	const qp = { ...params };
+	if (qp.productNo === undefined || qp.productNo === null) {
+		return Promise.reject(new Error('productNo is required'));
+	}
+	return fetch({
+		url: '/reviews/partner/ai-candidates',
+		method: 'get',
+		params: qp,
+		paramsSerializer: serializePartnerAiCandidatesParams
 	})
 }
 

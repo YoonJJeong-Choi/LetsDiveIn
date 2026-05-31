@@ -1,56 +1,21 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 
-import CurrencySelect from "../common/CurrencySelect";
-import LanguageSelect from "../common/LanguageSelect";
 import ToolbarBottom from "../headers/ToolbarBottom";
 import ScrollTop from "../common/ScrollTop";
-import { footerLinks, socialLinks } from "@/data/footerLinks";
-import axios from "axios";
+import { footerLinks } from "@/data/footerLinks";
+import {
+  STORE_ADDRESS,
+  STORE_EMAIL,
+  STORE_PHONE_DISPLAY,
+} from "@/data/storeContact";
 export default function Footer1({
   border = true,
   dark = false,
   hasPaddingBottom = false,
 }) {
-  const [success, setSuccess] = useState(true);
-  const [showMessage, setShowMessage] = useState(false);
-
-  const handleShowMessage = () => {
-    setShowMessage(true);
-    setTimeout(() => {
-      setShowMessage(false);
-    }, 2000);
-  };
-
-  const sendEmail = async (e) => {
-    e.preventDefault(); // Prevent default form submission behavior
-    const email = e.target.email.value;
-
-    try {
-      const response = await axios.post(
-        "https://express-brevomail.vercel.app/api/contacts",
-        {
-          email,
-        }
-      );
-
-      if ([200, 201].includes(response.status)) {
-        e.target.reset(); // Reset the form
-        setSuccess(true); // Set success state
-        handleShowMessage();
-      } else {
-        setSuccess(false); // Handle unexpected responses
-        handleShowMessage();
-      }
-    } catch (error) {
-      console.error("Error:", error.response?.data || "An error occurred");
-      setSuccess(false); // Set error state
-      handleShowMessage();
-      e.target.reset(); // Reset the form
-    }
-  };
   useEffect(() => {
     const headings = document.querySelectorAll(".footer-heading-mobile");
 
@@ -96,11 +61,7 @@ export default function Footer1({
                       <Link href={`/`}>
                         <Image
                           alt=""
-                          src={
-                            dark
-                              ? "/images/logo/logo-white.svg"
-                              : "/images/logo/logo.svg"
-                          }
+                          src="/images/logo/LetsDiveIn01.png"
                           width={127}
                           height={24}
                           style={{ width: "auto", height: "auto" }}
@@ -108,39 +69,26 @@ export default function Footer1({
                       </Link>
                     </div>
                     <div className="footer-address">
-                      <p>549 Oak St.Crystal Lake, IL 60014</p>
+                      <p>{STORE_ADDRESS}</p>
                       <Link
                         href={`/contact`}
                         className={`tf-btn-default fw-6 ${
                           dark ? "style-white" : ""
                         } `}
                       >
-                        GET DIRECTION
+                        길찾기
                         <i className="icon-arrowUpRight" />
                       </Link>
                     </div>
                     <ul className="footer-info">
                       <li>
                         <i className="icon-mail" />
-                        <p>themesflat@gmail.com</p>
+                        <p>{STORE_EMAIL}</p>
                       </li>
                       <li>
                         <i className="icon-phone" />
-                        <p>315-666-6688</p>
+                        <p>{STORE_PHONE_DISPLAY}</p>
                       </li>
-                    </ul>
-                    <ul
-                      className={`tf-social-icon  ${
-                        dark ? "style-white" : ""
-                      } `}
-                    >
-                      {socialLinks.map((link, index) => (
-                        <li key={index}>
-                          <a href={link.href} className={link.className}>
-                            <i className={`icon ${link.iconClass}`} />
-                          </a>
-                        </li>
-                      ))}
                     </ul>
                   </div>
                 </div>
@@ -178,89 +126,6 @@ export default function Footer1({
                     ))}
                   </div>
                 </div>
-                <div className="col-lg-4">
-                  <div className="footer-col-block">
-                    <div className="footer-heading text-button footer-heading-mobile">
-                      Newletter
-                    </div>
-                    <div className="tf-collapse-content">
-                      <div className="footer-newsletter">
-                        <p className="text-caption-1">
-                          Sign up for our newsletter and get 10% off your first
-                          purchase
-                        </p>
-                        <div
-                          className={`tfSubscribeMsg  footer-sub-element ${
-                            showMessage ? "active" : ""
-                          }`}
-                        >
-                          {success ? (
-                            <p style={{ color: "rgb(52, 168, 83)" }}>
-                              You have successfully subscribed.
-                            </p>
-                          ) : (
-                            <p style={{ color: "red" }}>Something went wrong</p>
-                          )}
-                        </div>
-                        <form
-                          onSubmit={sendEmail}
-                          className={`form-newsletter subscribe-form ${
-                            dark ? "style-black" : ""
-                          }`}
-                        >
-                          <div className="subscribe-content">
-                            <fieldset className="email">
-                              <input
-                                type="email"
-                                name="email"
-                                className="subscribe-email"
-                                placeholder="Enter your e-mail"
-                                tabIndex={0}
-                                aria-required="true"
-                              />
-                            </fieldset>
-                            <div className="button-submit">
-                              <button
-                                className="subscribe-button"
-                                type="submit"
-                              >
-                                <i className="icon icon-arrowUpRight" />
-                              </button>
-                            </div>
-                          </div>
-                          <div className="subscribe-msg" />
-                        </form>
-                        <div className="tf-cart-checkbox">
-                          <div className="tf-checkbox-wrapp">
-                            <input
-                              className=""
-                              type="checkbox"
-                              id="footer-Form_agree"
-                              name="agree_checkbox"
-                            />
-                            <div>
-                              <i className="icon-check" />
-                            </div>
-                          </div>
-                          <label
-                            className="text-caption-1"
-                            htmlFor="footer-Form_agree"
-                          >
-                            By clicking subcribe, you agree to the{" "}
-                            <Link className="fw-6 link" href={`/term-of-use`}>
-                              Terms of Service
-                            </Link>{" "}
-                            and{" "}
-                            <a className="fw-6 link" href="#">
-                              Privacy Policy
-                            </a>
-                            .
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -271,73 +136,8 @@ export default function Footer1({
                   <div className="footer-bottom-wrap">
                     <div className="left">
                       <p className="text-caption-1">
-                        ©{new Date().getFullYear()} Modave. All Rights Reserved.
+                        Copyright © {new Date().getFullYear()} Let's Dive In All rights reserved.
                       </p>
-                      <div className="tf-cur justify-content-end">
-                        <div className="tf-currencies">
-                          <CurrencySelect light={dark ? true : false} />
-                        </div>
-                        <div className="tf-languages">
-                          <LanguageSelect
-                            parentClassName={`image-select center style-default type-languages ${
-                              dark ? "color-white" : ""
-                            }`}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="tf-payment">
-                      <p className="text-caption-1">Payment:</p>
-                      <ul>
-                        <li>
-                          <Image
-                            alt=""
-                            src="/images/payment/img-1.png"
-                            width={100}
-                            height={64}
-                          />
-                        </li>
-                        <li>
-                          <Image
-                            alt=""
-                            src="/images/payment/img-2.png"
-                            width={100}
-                            height={64}
-                          />
-                        </li>
-                        <li>
-                          <Image
-                            alt=""
-                            src="/images/payment/img-3.png"
-                            width={100}
-                            height={64}
-                          />
-                        </li>
-                        <li>
-                          <Image
-                            alt=""
-                            src="/images/payment/img-4.png"
-                            width={98}
-                            height={64}
-                          />
-                        </li>
-                        <li>
-                          <Image
-                            alt=""
-                            src="/images/payment/img-5.png"
-                            width={102}
-                            height={64}
-                          />
-                        </li>
-                        <li>
-                          <Image
-                            alt=""
-                            src="/images/payment/img-6.png"
-                            width={98}
-                            height={64}
-                          />
-                        </li>
-                      </ul>
                     </div>
                   </div>
                 </div>

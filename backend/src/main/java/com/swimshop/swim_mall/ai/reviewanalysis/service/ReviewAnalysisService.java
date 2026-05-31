@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
@@ -12,6 +13,7 @@ import org.springframework.web.client.RestClientResponseException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.swimshop.swim_mall.ai.common.AiDailyLimitService;
 import com.swimshop.swim_mall.ai.reviewanalysis.client.OpenAiReviewAnalysisClient;
 import com.swimshop.swim_mall.ai.reviewanalysis.dto.ActionDto;
 import com.swimshop.swim_mall.ai.reviewanalysis.dto.AlertsDto;
@@ -20,8 +22,9 @@ import com.swimshop.swim_mall.ai.reviewanalysis.dto.KeywordDto;
 import com.swimshop.swim_mall.ai.reviewanalysis.dto.QuoteDto;
 import com.swimshop.swim_mall.ai.reviewanalysis.dto.ReviewAnalysisRequestDto;
 import com.swimshop.swim_mall.ai.reviewanalysis.dto.ReviewAnalysisResponseDto;
-import com.swimshop.swim_mall.ai.reviewanalysis.dto.SentimentDto;
 import com.swimshop.swim_mall.ai.reviewanalysis.dto.StatsDto;
+import com.swimshop.swim_mall.common.error.BusinessException;
+import com.swimshop.swim_mall.common.error.ErrorCode;
 import com.swimshop.swim_mall.ai.reviewanalysis.entity.ReviewAnalysisLogEntity;
 import com.swimshop.swim_mall.ai.reviewanalysis.repository.ReviewAnalysisLogRepository;
 
@@ -34,9 +37,7 @@ import lombok.extern.slf4j.Slf4j;
 public class ReviewAnalysisService {
 
     private static final List<String> ALLOWED_SEVERITIES = List.of("LOW", "MEDIUM", "HIGH");
-    private static final List<String> ALLOWED_IMPACTS = List.of("LOW", "MEDIUM", "HIGH");
     private static final List<String> ALLOWED_AREAS = List.of("DETAIL", "SIZE_GUIDE", "IMAGES", "PACKAGING", "FAQ", "CS_MACRO", "INVENTORY");
-    private static final List<String> ALLOWED_CONFIDENCES = List.of("LOW", "MEDIUM", "HIGH");
     private static final Pattern API_KEY_PATTERN = Pattern.compile("sk-[A-Za-z0-9_-]{10,}");
     private static final Pattern AUTHORIZATION_PATTERN = Pattern.compile("(?i)(authorization\\s*[:=]\\s*)(bearer\\s+)?[^\\s,\\\"]+");
     private static final Pattern SECRET_FIELD_PATTERN = Pattern.compile("(?i)(api[-_]?key|secret|token|password)");
@@ -44,11 +45,17 @@ public class ReviewAnalysisService {
     private final OpenAiReviewAnalysisClient openAiReviewAnalysisClient;
     private final ObjectMapper objectMapper;
     private final ReviewAnalysisLogRepository reviewAnalysisLogRepository;
+    private final AiDailyLimitService aiDailyLimitService;
+
+    @Value("${ai.review-analysis.minimum-required:3}")
+    private int minimumRequiredReviews;
 
     public ReviewAnalysisResponseDto analyzeForPartner(ReviewAnalysisRequestDto requestDto) {
         long startTime = System.currentTimeMillis();
         ReviewAnalysisRequestDto safeRequest = toNullSafeRequest(requestDto);
+        aiDailyLimitService.assertReviewAnalysisPartnerAllowed(safeRequest.getPartnerId());
         validateSingleTarget(safeRequest);
+        validateMinimumReviews(safeRequest);
         String productNosPayload = toSanitizedJson(safeRequest.getProductNos());
         String requestPayload = toSanitizedJson(safeRequest);
         String model = openAiReviewAnalysisClient.getModel();
@@ -68,14 +75,12 @@ public class ReviewAnalysisService {
             JsonNode root = parseJson(json);
             ReviewAnalysisResponseDto responseDto = ReviewAnalysisResponseDto.builder()
                     .summary(readRequiredText(root, "summary"))
-                    .sentiment(parseSentiment(root.path("sentiment")))
                     .issues(parseIssues(root.path("issues")))
                     .actions(parseActions(root.path("actions")))
                     .topKeywords(parseTopKeywords(root.path("topKeywords")))
                     .representativeQuotes(parseRepresentativeQuotes(root.path("representativeQuotes")))
                     .stats(parseStats(root.path("stats")))
                     .alerts(parseAlerts(root.path("alerts")))
-                    .confidence(readAllowedText(root, "confidence", ALLOWED_CONFIDENCES))
                     .build();
             saveLogBestEffort(safeRequest, productNosPayload, requestPayload, toSanitizedJson(responseDto), true, null, startTime, model);
             return responseDto;
@@ -94,17 +99,6 @@ public class ReviewAnalysisService {
         } catch (Exception e) {
             throw new IllegalArgumentException("Failed to parse AI JSON", e);
         }
-    }
-
-    private SentimentDto parseSentiment(JsonNode node) {
-        if (node == null || node.isNull() || !node.isObject()) {
-            throw new IllegalArgumentException("sentiment is required");
-        }
-        return SentimentDto.builder()
-                .positiveRatio(clampRatio(readRequiredDouble(node, "positiveRatio")))
-                .negativeRatio(clampRatio(readRequiredDouble(node, "negativeRatio")))
-                .neutralRatio(clampRatio(readRequiredDouble(node, "neutralRatio")))
-                .build();
     }
 
     private List<IssueDto> parseIssues(JsonNode node) {
@@ -132,7 +126,6 @@ public class ReviewAnalysisService {
             actions.add(ActionDto.builder()
                     .area(readAllowedText(item, "area", ALLOWED_AREAS))
                     .recommendation(readRequiredText(item, "recommendation"))
-                    .expectedImpact(readAllowedText(item, "expectedImpact", ALLOWED_IMPACTS))
                     .build());
         }
         return actions;
@@ -366,20 +359,22 @@ public class ReviewAnalysisService {
         }
     }
 
+    private void validateMinimumReviews(ReviewAnalysisRequestDto req) {
+        int currentCount = req == null || req.getReviews() == null ? 0 : req.getReviews().size();
+        int minimum = Math.max(1, minimumRequiredReviews);
+        if (currentCount < minimum) {
+            throw new BusinessException(ErrorCode.REVIEW_ANALYSIS_NOT_ENOUGH_REVIEWS, minimum, currentCount);
+        }
+    }
+
     private ReviewAnalysisResponseDto fallbackResponse() {
         return ReviewAnalysisResponseDto.builder()
                 .summary("리뷰 분석 일시 불가")
-                .sentiment(SentimentDto.builder()
-                        .positiveRatio(0d)
-                        .negativeRatio(0d)
-                        .neutralRatio(1d)
-                        .build())
                 .issues(List.of())
                 .actions(List.of(
                         ActionDto.builder()
                                 .area("FAQ")
                                 .recommendation("잠시 후 다시 시도해주세요.")
-                                .expectedImpact("LOW")
                                 .build()))
                 .topKeywords(List.of())
                 .representativeQuotes(List.of())
@@ -398,18 +393,32 @@ public class ReviewAnalysisService {
                         .policyViolation(false)
                         .policyTypes(List.of("AI_UNAVAILABLE"))
                         .build())
-                .confidence("LOW")
                 .build();
     }
 
-    private String safeErrorMessage(Exception e) {
-        String message = e.getMessage();
-        if (message == null) {
-            return e.getClass().getSimpleName();
+    /**
+     * 로그/DB 저장용. {@code AI request failed after retry}처럼 래핑만 있을 때 원인은 {@link Throwable#getCause()}에 있음.
+     */
+    private String safeErrorMessage(Throwable e) {
+        if (e == null) {
+            return "UnknownError";
         }
-        // 민감정보가 포함될 수 있는 줄바꿈/긴 메시지를 최소화
-        String compact = message.replace("\r", " ").replace("\n", " ");
-        return e.getClass().getSimpleName() + ": " + compact;
+        StringBuilder sb = new StringBuilder();
+        Throwable cur = e;
+        int depth = 0;
+        while (cur != null && depth < 6) {
+            if (depth > 0) {
+                sb.append(" <= ");
+            }
+            String msg = cur.getMessage();
+            String part = msg == null || msg.isBlank()
+                    ? cur.getClass().getSimpleName()
+                    : cur.getClass().getSimpleName() + ": " + msg.replace("\r", " ").replace("\n", " ");
+            sb.append(sanitizeText(part));
+            cur = cur.getCause();
+            depth++;
+        }
+        return truncate(sb.toString(), 1000);
     }
 
     private void saveLogBestEffort(

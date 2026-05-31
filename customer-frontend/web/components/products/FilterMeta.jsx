@@ -4,7 +4,7 @@ export default function FilterMeta({ allProps, productLength }) {
   return (
     <div className="meta-filter-shop" style={{}}>
       <div id="product-count-grid" className="count-text">
-        <span className="count">{productLength}</span> Products Found
+        <span className="count">{productLength}</span>개 상품
       </div>
 
       <div id="applied-filters">
@@ -66,7 +66,7 @@ export default function FilterMeta({ allProps, productLength }) {
           className="remove-all-filters text-btn-uppercase"
           onClick={allProps.clearFilter}
         >
-          REMOVE ALL <i className="icon icon-close" />
+          전체 초기화 <i className="icon icon-close" />
         </button>
       ) : (
         ""

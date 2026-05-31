@@ -5,12 +5,20 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { login as authLogin } from "@/lib/api/auth";
 import { getCart } from "@/lib/api/cart";
 import { useContextElement } from "@/context/Context";
+import { getPartnerAdminLoginUrl } from "@/lib/adminUrls";
 
 function safeNextPath(next) {
   if (!next || typeof next !== "string") return null;
   const t = next.trim();
   if (!t.startsWith("/") || t.startsWith("//")) return null;
   return t;
+}
+
+function getPortalErrorMessage(message) {
+  if (message) {
+    return message;
+  }
+  return "고객몰은 고객 계정만 로그인할 수 있습니다. 관리자 또는 파트너 계정은 관리자 페이지를 이용해주세요.";
 }
 
 function LoginForm() {
@@ -21,7 +29,9 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [portalError, setPortalError] = useState(false);
   const [loading, setLoading] = useState(false);
+  const showPortalGuide = searchParams.get("reason") === "portal" || portalError;
 
   const togglePassword = () => {
     setPasswordType((prevType) =>
@@ -32,16 +42,23 @@ function LoginForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setPortalError(false);
     setLoading(true);
     try {
       await authLogin(email, password);
-
-      setIsLoggedIn(true);
 
       const { getMe } = await import("@/lib/api/auth");
       const userData = await getMe();
       const user = userData?.data || userData;
       const userRole = user?.role;
+
+      if (userRole && userRole !== "CUSTOMER") {
+        setPortalError(true);
+        setError(getPortalErrorMessage());
+        return;
+      }
+
+      setIsLoggedIn(true);
 
       try {
         const cartData = await getCart();
@@ -67,15 +84,16 @@ function LoginForm() {
       }
 
       const next = safeNextPath(searchParams.get("next"));
-
-      if (userRole === "ADMIN" || userRole === "PARTNER") {
-        router.push("/admin/dashboard");
-      } else {
-        router.push(next || "/");
-      }
+      router.push(next || "/");
       router.refresh();
     } catch (err) {
-      const msg = err.response?.data?.message || "로그인에 실패했습니다.";
+      const status = err.response?.status;
+      const backendMessage = err.response?.data?.message;
+      const isPortalMismatch = status === 403;
+      const msg = isPortalMismatch
+        ? getPortalErrorMessage(backendMessage)
+        : backendMessage || "로그인에 실패했습니다.";
+      setPortalError(isPortalMismatch);
       setError(msg);
     } finally {
       setLoading(false);
@@ -94,7 +112,22 @@ function LoginForm() {
               onSubmit={handleSubmit}
               className="form-login form-has-password"
             >
-              {error && (
+              {showPortalGuide && (
+                <div className="alert alert-warning mb-3" role="status">
+                  <strong>현재 고객 페이지에서 사용할 수 없는 계정입니다.</strong>
+                  <p className="mt-2 mb-2">
+                    관리자 또는 파트너 계정은 고객몰에 로그인할 수 없습니다.
+                    고객 계정으로 다시 로그인하거나 관리자 페이지를 이용해주세요.
+                  </p>
+                  <Link
+                    href={getPartnerAdminLoginUrl()}
+                    className="text-button link"
+                  >
+                    관리자 로그인으로 이동
+                  </Link>
+                </div>
+              )}
+              {error && !portalError && (
                 <p className="text-danger mb-2" role="alert">
                   {error}
                 </p>
@@ -138,7 +171,7 @@ function LoginForm() {
                     />
                   </span>
                 </fieldset>
-                <div className="d-flex align-items-center justify-content-between">
+                <div className="d-flex align-items-center">
                   <div className="tf-cart-checkbox">
                     <div className="tf-checkbox-wrapp">
                       <input
@@ -154,12 +187,6 @@ function LoginForm() {
                     </div>
                     <label htmlFor="login-form_agree">로그인 상태 유지</label>
                   </div>
-                  <Link
-                    href={`/forget-password`}
-                    className="font-2 text-button forget-password link"
-                  >
-                    비밀번호를 잊으셨나요?
-                  </Link>
                 </div>
               </div>
               <div className="button-submit">

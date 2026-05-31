@@ -26,6 +26,7 @@ public class EventResponseDto {
     private String eventStatusLabel;
     private LocalDateTime customerEventStartAt;
     private LocalDateTime customerEventEndAt;
+    private LocalDateTime customerExposeAt;
     private Boolean partnerApplyEnabled;
     private LocalDateTime partnerApplyStartAt;
     private LocalDateTime partnerApplyEndAt;

@@ -1,11 +1,10 @@
 import Footer1 from "@/components/footers/Footer1";
 import Header1 from "@/components/headers/Header1";
-import Topbar6 from "@/components/headers/Topbar6";
 import EventDetail from "@/components/otherPages/EventDetail";
 import Link from "next/link";
 
 export const metadata = {
-  title: "이벤트 상세 || Swim Mall",
+  title: "이벤트 상세 || Let’s Dive In",
   description: "이벤트 상세",
 };
 
@@ -14,7 +13,6 @@ export default async function EventDetailPage({ params }) {
 
   return (
     <>
-      <Topbar6 bgColor="bg-main" />
       <Header1 />
       <div
         className="page-title"
@@ -27,7 +25,7 @@ export default async function EventDetailPage({ params }) {
               <ul className="breadcrumbs d-flex align-items-center justify-content-center">
                 <li>
                   <Link className="link" href={`/`}>
-                    Homepage
+                    홈
                   </Link>
                 </li>
                 <li>
@@ -38,10 +36,6 @@ export default async function EventDetailPage({ params }) {
                     이벤트
                   </Link>
                 </li>
-                <li>
-                  <i className="icon-arrRight" />
-                </li>
-                <li>{eventNo}</li>
               </ul>
             </div>
           </div>

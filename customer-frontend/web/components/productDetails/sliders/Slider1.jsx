@@ -1,21 +1,63 @@
 "use client";
-import { slides } from "@/data/singleProductSliders";
 import Drift from "drift-zoom";
 import PhotoSwipeLightbox from "photoswipe/lightbox";
 import { useEffect, useRef, useState } from "react";
 import { Navigation, Thumbs } from "swiper/modules";
 import { Swiper, SwiperSlide } from "swiper/react";
 import Image from "next/image";
+import { DEFAULT_PRODUCT_PLACEHOLDER } from "@/lib/media/productImage";
+
+/** 빈 문자열은 null과 동일하게 취급 (Next/Image src="" 경고 방지) */
+function trimUrl(url) {
+  if (url == null) return "";
+  const s = String(url).trim();
+  return s;
+}
+
 export default function Slider1({
   activeColor = "gray",
   setActiveColor = () => {},
   firstItem,
-  slideItems = slides,
+  slideItems,
   thumbSlidePerView = 6,
   thumbSlidePerViewOnMobile = 6,
 }) {
-  const items = [...slideItems];
-  items[0].src = firstItem ?? items[0].src;
+  const firstFromProp = trimUrl(firstItem);
+  const hasApiSlides = Array.isArray(slideItems) && slideItems.length > 0;
+  // 상세 갤러리(images[]) 없을 때 템플릿 슬라이드(slides)를 쓰지 않고 대표 1장만 표시
+  const rawSlides = hasApiSlides
+    ? slideItems
+    : firstFromProp
+      ? [
+          {
+            id: 1,
+            color: "gray",
+            src: firstFromProp,
+            alt: "",
+            width: 800,
+            height: 800,
+          },
+        ]
+      : [
+          {
+            id: 1,
+            color: "gray",
+            src: DEFAULT_PRODUCT_PLACEHOLDER,
+            alt: "",
+            width: 800,
+            height: 800,
+          },
+        ];
+  const firstNonEmptyInSlides = rawSlides.map((s) => trimUrl(s?.src)).find(Boolean);
+  const fallbackSrc = firstNonEmptyInSlides || DEFAULT_PRODUCT_PLACEHOLDER;
+
+  const items = rawSlides.map((slide, index) => {
+    const slideSrc = trimUrl(slide?.src);
+    let src =
+      index === 0 && firstFromProp ? firstFromProp : slideSrc;
+    if (!trimUrl(src)) src = fallbackSrc;
+    return { ...slide, src: trimUrl(src) || fallbackSrc };
+  });
 
   useEffect(() => {
     // Function to initialize Drift

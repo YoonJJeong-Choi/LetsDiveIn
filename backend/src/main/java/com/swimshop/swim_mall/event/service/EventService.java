@@ -58,6 +58,7 @@ public class EventService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.ADMIN_NOT_FOUND));
 
         validateCustomerEventPeriod(requestDto.getCustomerEventStartAt(), requestDto.getCustomerEventEndAt());
+        validateCustomerExposeAt(requestDto.getCustomerExposeAt(), requestDto.getCustomerEventEndAt());
         validatePartnerApplyPeriod(
                 requestDto.getEventMode(),
                 requestDto.getPartnerApplyEnabled(),
@@ -71,6 +72,7 @@ public class EventService {
                 requestDto.getSaleDiscountType(),
                 requestDto.getSaleDiscountValue()
         );
+        validateNoticeEventPolicy(requestDto.getEventType(), requestDto.getEventMode());
         validatePointEventRewardPolicy(
                 requestDto.getEventType(),
                 requestDto.getSaleDiscountType(),
@@ -89,6 +91,7 @@ public class EventService {
                 .eventStatus(requestDto.getEventStatus())
                 .customerEventStartAt(requestDto.getCustomerEventStartAt())
                 .customerEventEndAt(requestDto.getCustomerEventEndAt())
+                .customerExposeAt(requestDto.getCustomerExposeAt())
                 .partnerApplyEnabled(requestDto.getEventMode() == EventMode.PARTNER_PARTICIPATION)
                 .partnerApplyStartAt(requestDto.getEventMode() == EventMode.PARTNER_PARTICIPATION ? requestDto.getPartnerApplyStartAt() : null)
                 .partnerApplyEndAt(requestDto.getEventMode() == EventMode.PARTNER_PARTICIPATION ? requestDto.getPartnerApplyEndAt() : null)
@@ -117,6 +120,7 @@ public class EventService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.EVENT_NOT_FOUND));
 
         validateCustomerEventPeriod(requestDto.getCustomerEventStartAt(), requestDto.getCustomerEventEndAt());
+        validateCustomerExposeAt(requestDto.getCustomerExposeAt(), requestDto.getCustomerEventEndAt());
         validatePartnerApplyPeriod(
                 requestDto.getEventMode(),
                 requestDto.getPartnerApplyEnabled(),
@@ -130,6 +134,7 @@ public class EventService {
                 requestDto.getSaleDiscountType(),
                 requestDto.getSaleDiscountValue()
         );
+        validateNoticeEventPolicy(requestDto.getEventType(), requestDto.getEventMode());
         validatePointEventRewardPolicy(
                 requestDto.getEventType(),
                 requestDto.getSaleDiscountType(),
@@ -148,6 +153,7 @@ public class EventService {
                 requestDto.getEventStatus(),
                 requestDto.getCustomerEventStartAt(),
                 requestDto.getCustomerEventEndAt(),
+                requestDto.getCustomerExposeAt(),
                 requestDto.getEventMode() == EventMode.PARTNER_PARTICIPATION,
                 requestDto.getEventMode() == EventMode.PARTNER_PARTICIPATION ? requestDto.getPartnerApplyStartAt() : null,
                 requestDto.getEventMode() == EventMode.PARTNER_PARTICIPATION ? requestDto.getPartnerApplyEndAt() : null,
@@ -276,20 +282,29 @@ public class EventService {
     }
 
     public List<EventResponseDto> getPublicEvents() {
+        LocalDateTime now = LocalDateTime.now();
         return eventRepository.findPublicVisibleEvents(
-                        List.of(EventStatus.SCHEDULED, EventStatus.ACTIVE, EventStatus.ENDED)
+                        publicFacingEventStatuses(),
+                        now
                 ).stream()
-                .map(this::toResponseDto)
+                .map(this::toExternalResponseDto)
                 .collect(Collectors.toList());
     }
 
     public EventResponseDto getPublicEventDetail(Long eventNo) {
+        LocalDateTime now = LocalDateTime.now();
         EventEntity event = eventRepository.findPublicVisibleEventDetail(
                         eventNo,
-                        List.of(EventStatus.SCHEDULED, EventStatus.ACTIVE, EventStatus.ENDED)
+                        publicFacingEventStatuses(),
+                        now
                 )
                 .orElseThrow(() -> new BusinessException(ErrorCode.EVENT_NOT_FOUND));
-        return toResponseDto(event);
+        return toExternalResponseDto(event);
+    }
+
+    /** 고객/파트너 목록 노출 허용 상태 */
+    static List<EventStatus> publicFacingEventStatuses() {
+        return List.of(EventStatus.PUBLISHED, EventStatus.ENDED);
     }
 
     public List<EventResponseDto> getPartnerVisibleEvents(HttpSession session, Integer upcomingDays) {
@@ -308,12 +323,12 @@ public class EventService {
         if (latestStartAt == null) {
             events = eventRepository.findPartnerVisibleEvents(
                     EventMode.PARTNER_PARTICIPATION,
-                    List.of(EventStatus.SCHEDULED, EventStatus.ACTIVE, EventStatus.ENDED)
+                    publicFacingEventStatuses()
             );
         } else {
             events = eventRepository.findPartnerVisibleEventsWithStartAtLimit(
                     EventMode.PARTNER_PARTICIPATION,
-                    List.of(EventStatus.SCHEDULED, EventStatus.ACTIVE, EventStatus.ENDED),
+                    publicFacingEventStatuses(),
                     latestStartAt
             );
         }
@@ -358,6 +373,7 @@ public class EventService {
                             .eventStatusLabel(dto.getEventStatusLabel())
                             .customerEventStartAt(dto.getCustomerEventStartAt())
                             .customerEventEndAt(dto.getCustomerEventEndAt())
+                            .customerExposeAt(dto.getCustomerExposeAt())
                             .partnerApplyEnabled(dto.getPartnerApplyEnabled())
                             .partnerApplyStartAt(dto.getPartnerApplyStartAt())
                             .partnerApplyEndAt(dto.getPartnerApplyEndAt())
@@ -370,9 +386,9 @@ public class EventService {
                             .pointEventTargetValues(dto.getPointEventTargetValues())
                             .pointEventMinOrderAmount(dto.getPointEventMinOrderAmount())
                             .eventMode(dto.getEventMode())
-                            .adminMemo(dto.getAdminMemo())
-                            .adminNo(dto.getAdminNo())
-                            .adminName(dto.getAdminName())
+                            .adminMemo(null)
+                            .adminNo(null)
+                            .adminName(null)
                             .createdAt(dto.getCreatedAt())
                             .updatedAt(dto.getUpdatedAt())
                             .visibleToCustomerNow(dto.getVisibleToCustomerNow())
@@ -388,12 +404,57 @@ public class EventService {
                 .collect(Collectors.toList());
     }
 
+    private EventResponseDto toExternalResponseDto(EventEntity event) {
+        EventResponseDto dto = toResponseDto(event);
+        return EventResponseDto.builder()
+                .eventNo(dto.getEventNo())
+                .eventTitle(dto.getEventTitle())
+                .eventContent(dto.getEventContent())
+                .eventStatus(dto.getEventStatus())
+                .eventStatusLabel(dto.getEventStatusLabel())
+                .customerEventStartAt(dto.getCustomerEventStartAt())
+                .customerEventEndAt(dto.getCustomerEventEndAt())
+                .customerExposeAt(dto.getCustomerExposeAt())
+                .partnerApplyEnabled(dto.getPartnerApplyEnabled())
+                .partnerApplyStartAt(dto.getPartnerApplyStartAt())
+                .partnerApplyEndAt(dto.getPartnerApplyEndAt())
+                .thumbnailUrl(dto.getThumbnailUrl())
+                .eventType(dto.getEventType())
+                .saleDiscountType(dto.getSaleDiscountType())
+                .saleDiscountValue(dto.getSaleDiscountValue())
+                .saleMaxDiscountAmount(dto.getSaleMaxDiscountAmount())
+                .pointEventTargetType(dto.getPointEventTargetType())
+                .pointEventTargetValues(dto.getPointEventTargetValues())
+                .pointEventMinOrderAmount(dto.getPointEventMinOrderAmount())
+                .eventMode(dto.getEventMode())
+                .adminMemo(null)
+                .adminNo(null)
+                .adminName(null)
+                .createdAt(dto.getCreatedAt())
+                .updatedAt(dto.getUpdatedAt())
+                .visibleToCustomerNow(dto.getVisibleToCustomerNow())
+                .participationOpenNow(dto.getParticipationOpenNow())
+                .participationEnabled(dto.getParticipationEnabled())
+                .participating(dto.getParticipating())
+                .build();
+    }
+
     private void validateCustomerEventPeriod(LocalDateTime startAt, LocalDateTime endAt) {
         if (startAt == null || endAt == null) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "고객 이벤트 시작/종료일시는 필수입니다.");
         }
         if (endAt.isBefore(startAt)) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "고객 이벤트 종료일시는 시작일시보다 빠를 수 없습니다.");
+        }
+    }
+
+    private void validateCustomerExposeAt(LocalDateTime exposeAt, LocalDateTime customerEventEndAt) {
+        if (exposeAt == null) {
+            return;
+        }
+        if (customerEventEndAt != null && exposeAt.isAfter(customerEventEndAt)) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "고객 공개일시는 고객 이벤트 종료일시보다 늦을 수 없습니다.");
         }
     }
 
@@ -432,33 +493,35 @@ public class EventService {
 
     private void validateStatusTransition(EventStatus from, EventStatus to) {
         if (from == to) return;
-
+        if (from == EventStatus.ENDED) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "종료된 이벤트는 상태를 변경할 수 없습니다.");
+        }
+        if (to == EventStatus.ENDED) {
+            return;
+        }
         switch (from) {
-            case DRAFT -> {
-                if (to != EventStatus.SCHEDULED && to != EventStatus.ACTIVE && to != EventStatus.INACTIVE) {
-                    throw new BusinessException(ErrorCode.INVALID_REQUEST, "DRAFT ?곹깭?먯꽌??SCHEDULED/ACTIVE/INACTIVE濡쒕쭔 蹂寃?媛?ν빀?덈떎.");
+            case PRIVATE -> {
+                if (to != EventStatus.PUBLISHED) {
+                    throw new BusinessException(ErrorCode.INVALID_REQUEST, "비공개에서는 공개 또는 종료로만 변경할 수 있습니다.");
                 }
             }
-            case SCHEDULED -> {
-                if (to != EventStatus.ACTIVE && to != EventStatus.INACTIVE) {
-                    throw new BusinessException(ErrorCode.INVALID_REQUEST, "SCHEDULED ?곹깭?먯꽌??ACTIVE/INACTIVE濡쒕쭔 蹂寃?媛?ν빀?덈떎.");
+            case PUBLISHED -> {
+                if (to != EventStatus.PRIVATE) {
+                    throw new BusinessException(ErrorCode.INVALID_REQUEST, "공개에서는 비공개 또는 종료로만 변경할 수 있습니다.");
                 }
             }
-            case ACTIVE -> {
-                if (to != EventStatus.ENDED && to != EventStatus.INACTIVE) {
-                    throw new BusinessException(ErrorCode.INVALID_REQUEST, "ACTIVE ?곹깭?먯꽌??ENDED/INACTIVE濡쒕쭔 蹂寃?媛?ν빀?덈떎.");
-                }
-            }
-            case ENDED -> {
-                // 일단 ENDED가 되면 더 이상 어떤 상태로도 전환할 수 없습니다. (불가역)
-                throw new BusinessException(ErrorCode.INVALID_REQUEST, "종료된 이벤트는 상태를 변경할 수 없습니다.");
-            }
-            case INACTIVE -> {
-                if (to != EventStatus.SCHEDULED && to != EventStatus.ACTIVE) {
-                    throw new BusinessException(ErrorCode.INVALID_REQUEST, "INACTIVE ?곹깭?먯꽌??SCHEDULED/ACTIVE濡쒕쭔 蹂寃?媛?ν빀?덈떎.");
-                }
-            }
-            default -> throw new BusinessException(ErrorCode.INVALID_REQUEST, "吏?먰븯吏 ?딅뒗 ?곹깭 ?꾪솚?낅땲??");
+            default -> throw new BusinessException(ErrorCode.INVALID_REQUEST, "지원하지 않는 상태 전환입니다.");
+        }
+    }
+
+    private void validateNoticeEventPolicy(EventType eventType, EventMode eventMode) {
+        if (eventType != EventType.NOTICE) {
+            return;
+        }
+        EventMode mode = eventMode != null ? eventMode : EventMode.ADMIN_ONLY;
+        if (mode != EventMode.ADMIN_ONLY) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "공지(NOTICE) 이벤트는 운영 직접 등록(ADMIN_ONLY)으로만 생성·수정할 수 있습니다.");
         }
     }
 
@@ -571,7 +634,9 @@ public class EventService {
 
     private EventResponseDto toResponseDto(EventEntity event) {
         LocalDateTime now = LocalDateTime.now();
-        boolean visibleToCustomer = event.getEventStatus() == EventStatus.ACTIVE
+        boolean visibleToCustomer = event.getEventStatus() == EventStatus.PUBLISHED
+                && event.getCustomerExposeAt() != null
+                && !now.isBefore(event.getCustomerExposeAt())
                 && !now.isBefore(event.getCustomerEventStartAt())
                 && !now.isAfter(event.getCustomerEventEndAt());
 
@@ -589,6 +654,7 @@ public class EventService {
                 .eventStatusLabel(event.getEventStatus().getLabel())
                 .customerEventStartAt(event.getCustomerEventStartAt())
                 .customerEventEndAt(event.getCustomerEventEndAt())
+                .customerExposeAt(event.getCustomerExposeAt())
                 .partnerApplyEnabled(event.getPartnerApplyEnabled())
                 .partnerApplyStartAt(event.getPartnerApplyStartAt())
                 .partnerApplyEndAt(event.getPartnerApplyEndAt())

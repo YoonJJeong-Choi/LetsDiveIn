@@ -1,12 +1,14 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { getAddresses, addAddress, updateAddress, deleteAddress } from "@/lib/api/customer";
+import InlineTemplateLoader from "@/components/common/InlineTemplateLoader";
 
-export default function Address() {
+export default function Address({ embedded = false }) {
   const [addresses, setAddresses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingAddressNo, setEditingAddressNo] = useState(null);
+  const [isAddressScriptReady, setIsAddressScriptReady] = useState(false);
 
   // 새 주소 폼 데이터
   const [newAddress, setNewAddress] = useState({
@@ -21,6 +23,29 @@ export default function Address() {
   // 주소 목록 조회
   useEffect(() => {
     fetchAddresses();
+  }, []);
+
+  // 다음(카카오) 주소 검색 스크립트 로드
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window?.daum?.Postcode) {
+      setIsAddressScriptReady(true);
+      return;
+    }
+
+    const existingScript = document.querySelector('script[data-daum-postcode="true"]');
+    if (existingScript) {
+      existingScript.addEventListener("load", () => setIsAddressScriptReady(true));
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js";
+    script.async = true;
+    script.dataset.daumPostcode = "true";
+    script.onload = () => setIsAddressScriptReady(true);
+    script.onerror = () => setIsAddressScriptReady(false);
+    document.head.appendChild(script);
   }, []);
 
   const fetchAddresses = async () => {
@@ -102,23 +127,39 @@ export default function Address() {
     }
   };
 
+  const openAddressSearch = (onComplete) => {
+    if (!window?.daum?.Postcode) {
+      alert("주소 검색 서비스를 불러오는 중입니다. 잠시 후 다시 시도해주세요.");
+      return;
+    }
+    new window.daum.Postcode({
+      oncomplete: (data) => {
+        const selectedAddress = data.roadAddress || data.jibunAddress || "";
+        const selectedZipCode = data.zonecode || "";
+        onComplete(selectedAddress, selectedZipCode);
+      },
+    }).open();
+  };
+
   if (loading && addresses.length === 0) {
     return (
-      <div className="my-account-content">
-        <div className="text-center p-4">주소를 불러오는 중...</div>
+      <div className={embedded ? "" : "my-account-content"}>
+        <div className="p-4 d-flex justify-content-center">
+          <InlineTemplateLoader />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="my-account-content">
+    <div className={embedded ? "" : "my-account-content"}>
       <div className="account-address">
-        <div className="text-center widget-inner-address">
+        <div className="widget-inner-address">
           <button
-            className="tf-btn btn-fill radius-4 mb_20 btn-address"
+            className="tf-btn btn-fill mb_20"
             onClick={() => setShowAddForm(!showAddForm)}
           >
-            <span className="text text-caption-1">새 주소 추가</span>
+            <span className="text text-button">새 주소 추가</span>
           </button>
 
           {/* 주소 추가 폼 */}
@@ -155,9 +196,7 @@ export default function Address() {
                   type="text"
                   placeholder="배송지 주소*"
                   value={newAddress.deliveryAddress}
-                  onChange={(e) =>
-                    setNewAddress({ ...newAddress, deliveryAddress: e.target.value })
-                  }
+                  readOnly
                   required
                 />
               </fieldset>
@@ -174,13 +213,33 @@ export default function Address() {
             <fieldset className="mb_20">
               <input
                 type="text"
-                  placeholder="우편번호"
+                  placeholder="우편번호*"
                   value={newAddress.deliveryZipCode}
-                  onChange={(e) =>
-                    setNewAddress({ ...newAddress, deliveryZipCode: e.target.value })
-                  }
+                  readOnly
+                  required
               />
             </fieldset>
+            <div className="mb_20">
+              <button
+                type="button"
+                className="tf-btn btn-fill"
+                style={{ width: "100%" }}
+                onClick={() =>
+                  openAddressSearch((address, zipCode) =>
+                    setNewAddress((prev) => ({
+                      ...prev,
+                      deliveryAddress: address,
+                      deliveryZipCode: zipCode,
+                    }))
+                  )
+                }
+                disabled={!isAddressScriptReady}
+              >
+                <span className="text text-button">
+                  {isAddressScriptReady ? "주소 검색" : "주소 검색 준비 중..."}
+                </span>
+              </button>
+            </div>
             <div className="tf-cart-checkbox mb_20">
               <div className="tf-checkbox-wrapp">
                 <input
@@ -196,13 +255,13 @@ export default function Address() {
               </div>
                 <label>기본 주소로 설정</label>
             </div>
-            <div className="d-flex align-items-center justify-content-center gap-20">
-                <button type="submit" className="tf-btn btn-fill radius-4" disabled={loading}>
-                  <span className="text">{loading ? "추가 중..." : "주소 추가"}</span>
+            <div className="d-flex align-items-center justify-content-end gap-20">
+                <button type="submit" className="tf-btn btn-fill" disabled={loading}>
+                  <span className="text text-button">{loading ? "추가 중..." : "주소 추가"}</span>
               </button>
                 <button
                   type="button"
-                  className="tf-btn btn-fill radius-4"
+                  className="tf-btn btn-fill"
                   onClick={() => {
                     setShowAddForm(false);
                     setNewAddress({
@@ -215,7 +274,7 @@ export default function Address() {
                     });
                   }}
                 >
-                  <span className="text">취소</span>
+                  <span className="text text-button">취소</span>
                 </button>
             </div>
           </form>
@@ -229,7 +288,16 @@ export default function Address() {
               </div>
             ) : (
               addresses.map((address) => (
-                <div className="account-address-item" key={address.addressNo}>
+                <div
+                  className="account-address-item"
+                  key={address.addressNo}
+                  style={{
+                    border: "1px solid #e9e9e9",
+                    borderRadius: "8px",
+                    width: "min(100%, 560px)",
+                    textAlign: "center",
+                  }}
+                >
                   <h6 className="mb_20">
                     {address.isDefault ? "기본 주소" : "주소"}
                   </h6>
@@ -240,19 +308,19 @@ export default function Address() {
                   {address.deliveryZipCode && <p>우편번호: {address.deliveryZipCode}</p>}
                   <div className="d-flex gap-10 justify-content-center mt-3">
                   <button
-                      className="tf-btn radius-4 btn-fill justify-content-center"
+                      className="tf-btn btn-fill justify-content-center"
                       onClick={() => handleEditToggle(address)}
                   >
-                    <span className="text">
+                    <span className="text text-button">
                         {editingAddressNo === address.addressNo ? "닫기" : "수정"}
                     </span>
                   </button>
                   <button
-                      className="tf-btn radius-4 btn-outline justify-content-center"
+                      className="tf-btn btn-fill justify-content-center"
                       onClick={() => handleDeleteAddress(address.addressNo)}
                       disabled={loading}
                   >
-                      <span className="text">삭제</span>
+                      <span className="text text-button">삭제</span>
                   </button>
                   </div>
 
@@ -262,6 +330,8 @@ export default function Address() {
                       address={address}
                       onSave={(addressData) => handleUpdateAddress(address.addressNo, addressData)}
                       onCancel={() => setEditingAddressNo(null)}
+                      onSearchAddress={openAddressSearch}
+                      isAddressScriptReady={isAddressScriptReady}
                       loading={loading}
                     />
                   )}
@@ -276,7 +346,7 @@ export default function Address() {
 }
 
 // 주소 수정 폼 컴포넌트
-function AddressEditForm({ address, onSave, onCancel, loading }) {
+function AddressEditForm({ address, onSave, onCancel, onSearchAddress, isAddressScriptReady, loading }) {
   const [editData, setEditData] = useState({
     recipientName: address.recipientName || "",
     recipientPhone: address.recipientPhone || "",
@@ -324,9 +394,7 @@ function AddressEditForm({ address, onSave, onCancel, loading }) {
           type="text"
           placeholder="배송지 주소*"
           value={editData.deliveryAddress}
-          onChange={(e) =>
-            setEditData({ ...editData, deliveryAddress: e.target.value })
-          }
+          readOnly
                         required
                       />
                     </fieldset>
@@ -343,13 +411,33 @@ function AddressEditForm({ address, onSave, onCancel, loading }) {
                     <fieldset className="mb_20">
                       <input
                         type="text"
-          placeholder="우편번호"
+          placeholder="우편번호*"
           value={editData.deliveryZipCode}
-          onChange={(e) =>
-            setEditData({ ...editData, deliveryZipCode: e.target.value })
-          }
+          readOnly
+          required
                       />
                     </fieldset>
+                    <div className="mb_20">
+                      <button
+                        type="button"
+                        className="tf-btn btn-fill"
+                        style={{ width: "100%" }}
+                        onClick={() =>
+                          onSearchAddress((selectedAddress, selectedZipCode) =>
+                            setEditData((prev) => ({
+                              ...prev,
+                              deliveryAddress: selectedAddress,
+                              deliveryZipCode: selectedZipCode,
+                            }))
+                          )
+                        }
+                        disabled={!isAddressScriptReady}
+                      >
+                        <span className="text text-button">
+                          {isAddressScriptReady ? "주소 검색" : "주소 검색 준비 중..."}
+                        </span>
+                      </button>
+                    </div>
                     <div className="tf-cart-checkbox mb_20">
                       <div className="tf-checkbox-wrapp">
                         <input
@@ -368,17 +456,13 @@ function AddressEditForm({ address, onSave, onCancel, loading }) {
                     <div className="d-flex flex-column gap-20">
                       <button
                         type="submit"
-                        className="tf-btn btn-fill radius-4"
+                        className="tf-btn btn-fill"
           disabled={loading}
                       >
-          <span className="text">{loading ? "저장 중..." : "저장"}</span>
+          <span className="text text-button">{loading ? "저장 중..." : "저장"}</span>
                       </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="tf-btn btn-fill radius-4"
-        >
-          <span className="text">취소</span>
+        <button type="button" onClick={onCancel} className="tf-btn btn-fill">
+          <span className="text text-button">취소</span>
         </button>
       </div>
     </form>

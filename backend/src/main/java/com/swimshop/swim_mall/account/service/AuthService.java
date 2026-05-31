@@ -1,5 +1,8 @@
 package com.swimshop.swim_mall.account.service;
 
+import java.net.URI;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -9,16 +12,18 @@ import com.swimshop.swim_mall.account.dto.AuthLoginResponseDto;
 import com.swimshop.swim_mall.account.entity.AccountEntity;
 import com.swimshop.swim_mall.account.repository.AccountRepository;
 import com.swimshop.swim_mall.common.enums.AccountRole;
+import com.swimshop.swim_mall.common.enums.AuthPortal;
+import com.swimshop.swim_mall.common.enums.CustomerActivityType;
 import com.swimshop.swim_mall.common.error.BusinessException;
 import com.swimshop.swim_mall.common.error.ErrorCode;
-import com.swimshop.swim_mall.customer.entity.CustomerEntity;
-import com.swimshop.swim_mall.customer.reopository.CustomerRepository;
+import com.swimshop.swim_mall.common.ratelimit.LoginLockoutService;
 import com.swimshop.swim_mall.customer.entity.CustomerActivityLogEntity;
+import com.swimshop.swim_mall.customer.entity.CustomerEntity;
 import com.swimshop.swim_mall.customer.reopository.CustomerActivityLogRepository;
-import com.swimshop.swim_mall.common.enums.CustomerActivityType;
+import com.swimshop.swim_mall.customer.reopository.CustomerRepository;
 
-import jakarta.servlet.http.HttpSession;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -33,11 +38,37 @@ public class AuthService {
     private final CustomerRepository customerRepository;
     private final PasswordEncoder passwordEncoder;
     private final CustomerActivityLogRepository customerActivityLogRepository;
+    private final LoginLockoutService loginLockoutService;
+    @Value("${app.customer-frontend-url:http://localhost:3000}")
+    private String customerFrontendUrl;
+    @Value("${app.admin-frontend-url:http://localhost:3001}")
+    private String adminFrontendUrl;
 
     public AuthLoginResponseDto login(AuthLoginRequestDto request, HttpServletRequest httpRequest) {
         String email = request.getEmail();
+        String emailKey = LoginLockoutService.normalizeEmail(email);
         String rawPassword = request.getPassword();
+        AuthPortal portal = resolvePortal(request, httpRequest);
 
+        loginLockoutService.assertNotLocked(emailKey);
+
+        try {
+            return doLogin(email, rawPassword, portal, httpRequest, emailKey);
+        } catch (BusinessException e) {
+            if (e.getErrorCode() == ErrorCode.INVALID_CREDENTIALS) {
+                loginLockoutService.recordFailure(emailKey);
+            }
+            throw e;
+        }
+    }
+
+    private AuthLoginResponseDto doLogin(
+            String email,
+            String rawPassword,
+            AuthPortal portal,
+            HttpServletRequest httpRequest,
+            String emailKey
+    ) {
         // 1) Account로 로그인 시도
         var accountOpt = accountRepository.findByEmail(email);
         if (accountOpt.isPresent()) {
@@ -52,12 +83,14 @@ public class AuthService {
             if (account.getRole() == AccountRole.CUSTOMER && !Boolean.TRUE.equals(account.getEmailVerified())) {
                 throw new BusinessException(ErrorCode.EMAIL_NOT_VERIFIED);
             }
+            validatePortalAccess(account.getRole(), portal);
             
             // 고객 로그인인 경우 활동 로그 기록
             if (account.getRole() == AccountRole.CUSTOMER && account.getCustomer() != null) {
                 recordLoginActivity(account.getCustomer(), httpRequest);
             }
-            
+
+            loginLockoutService.clearFailures(emailKey);
             return buildResponseFromAccount(account);
         }
 
@@ -74,10 +107,12 @@ public class AuthService {
         if (!customer.getEmailChecked()) {
             throw new BusinessException(ErrorCode.EMAIL_NOT_VERIFIED);
         }
+        validatePortalAccess(AccountRole.CUSTOMER, portal);
         
         // 활동 로그 기록
         recordLoginActivity(customer, httpRequest);
-        
+
+        loginLockoutService.clearFailures(emailKey);
         return AuthLoginResponseDto.of(
                 AccountRole.CUSTOMER,
                 customer.getCustomerId(),
@@ -150,6 +185,12 @@ public class AuthService {
         }
 
         throw new BusinessException(ErrorCode.UNAUTHORIZED);
+    }
+
+    public AuthLoginResponseDto getCurrentUser(HttpSession session, HttpServletRequest httpRequest) {
+        AuthLoginResponseDto currentUser = getCurrentUser(session);
+        validatePortalAccess(currentUser.getRole(), resolvePortal(null, httpRequest));
+        return currentUser;
     }
     
     /**
@@ -237,5 +278,98 @@ public class AuthService {
         if (value == null) return null;
         if (value instanceof Number) return ((Number) value).longValue();
         return (Long) value;
+    }
+
+    private void validatePortalAccess(AccountRole role, AuthPortal portal) {
+        if (portal == null || portal.supports(role)) {
+            return;
+        }
+
+        throw new BusinessException(
+                ErrorCode.FORBIDDEN,
+                "%s에서는 %s만 로그인할 수 있습니다.".formatted(portal.getLabel(), portal.getAllowedRoleLabel()));
+    }
+
+    private AuthPortal resolvePortal(AuthLoginRequestDto request, HttpServletRequest httpRequest) {
+        if (request != null && request.getPortal() != null) {
+            return request.getPortal();
+        }
+        if (httpRequest == null) {
+            return null;
+        }
+
+        String source = firstNonBlank(httpRequest.getHeader("Origin"), httpRequest.getHeader("Referer"));
+        if (matchesOrigin(source, customerFrontendUrl)) {
+            return AuthPortal.CUSTOMER;
+        }
+        if (matchesOrigin(source, adminFrontendUrl)) {
+            return AuthPortal.ADMIN;
+        }
+        return null;
+    }
+
+    private String firstNonBlank(String... candidates) {
+        for (String candidate : candidates) {
+            if (candidate != null && !candidate.isBlank()) {
+                return candidate.trim();
+            }
+        }
+        return null;
+    }
+
+    private boolean matchesOrigin(String actualUrl, String configuredUrl) {
+        URI actual = parseUri(actualUrl);
+        URI configured = parseUri(configuredUrl);
+        if (actual == null || configured == null) {
+            return false;
+        }
+        if (!sameScheme(actual, configured)) {
+            return false;
+        }
+        if (resolvePort(actual) != resolvePort(configured)) {
+            return false;
+        }
+        return sameHost(actual.getHost(), configured.getHost());
+    }
+
+    private URI parseUri(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return URI.create(value.trim());
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    private boolean sameScheme(URI left, URI right) {
+        String leftScheme = left.getScheme() == null ? "" : left.getScheme();
+        String rightScheme = right.getScheme() == null ? "" : right.getScheme();
+        return leftScheme.equalsIgnoreCase(rightScheme);
+    }
+
+    private int resolvePort(URI uri) {
+        if (uri.getPort() >= 0) {
+            return uri.getPort();
+        }
+        return "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
+    }
+
+    private boolean sameHost(String leftHost, String rightHost) {
+        if (leftHost == null || rightHost == null) {
+            return false;
+        }
+        if (leftHost.equalsIgnoreCase(rightHost)) {
+            return true;
+        }
+        return isLocalAlias(leftHost, rightHost);
+    }
+
+    private boolean isLocalAlias(String leftHost, String rightHost) {
+        String left = leftHost.toLowerCase();
+        String right = rightHost.toLowerCase();
+        return ("localhost".equals(left) && "127.0.0.1".equals(right))
+                || ("127.0.0.1".equals(left) && "localhost".equals(right));
     }
 }

@@ -1,5 +1,6 @@
 package com.swimshop.swim_mall.order.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -8,11 +9,14 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import com.swimshop.swim_mall.common.enums.OrderStatus;
 import com.swimshop.swim_mall.customer.entity.CustomerEntity;
 import com.swimshop.swim_mall.order.entity.OrderEntity;
 
 @Repository
 public interface OrderRepository extends JpaRepository<OrderEntity, Long> {
+
+    long countByOrderStatus(OrderStatus orderStatus);
     
     // 고객별 주문 목록 조회
     List<OrderEntity> findByCustomerOrderByOrderCreatedAtDesc(CustomerEntity customer);
@@ -55,4 +59,11 @@ public interface OrderRepository extends JpaRepository<OrderEntity, Long> {
            "   OR (opt IS NULL AND prodPartner.partnerId = :partnerId) " +
            "ORDER BY o.orderCreatedAt DESC")
     List<OrderEntity> findByPartnerId(@Param("partnerId") Long partnerId);
+
+    /** 대시보드 매출 비중·TOP 상품용: 주문번호 목록으로 상품까지 한 번에 로드 */
+    @Query("SELECT DISTINCT o FROM OrderEntity o "
+            + "LEFT JOIN FETCH o.orderItems oi "
+            + "LEFT JOIN FETCH oi.product p "
+            + "WHERE o.orderNo IN :orderNos")
+    List<OrderEntity> findByOrderNoInWithItemsAndProduct(@Param("orderNos") Collection<Long> orderNos);
 }

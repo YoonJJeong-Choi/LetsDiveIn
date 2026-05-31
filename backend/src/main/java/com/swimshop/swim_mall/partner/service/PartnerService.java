@@ -1,12 +1,15 @@
 package com.swimshop.swim_mall.partner.service;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -18,11 +21,11 @@ import java.time.YearMonth;
 import java.time.DayOfWeek;
 
 import com.swimshop.swim_mall.account.dto.AuthLoginResponseDto;
-import com.swimshop.swim_mall.account.entity.AccountEntity;
 import com.swimshop.swim_mall.account.repository.AccountRepository;
 import com.swimshop.swim_mall.account.service.AuthService;
 import com.swimshop.swim_mall.admin.entity.AdminEntity;
 import com.swimshop.swim_mall.admin.repository.AdminRepository;
+import com.swimshop.swim_mall.color.repository.ColorRepository;
 import com.swimshop.swim_mall.customer.reopository.CustomerRepository;
 import com.swimshop.swim_mall.common.enums.AccountRole;
 import com.swimshop.swim_mall.common.enums.ActiveStatus;
@@ -38,6 +41,9 @@ import com.swimshop.swim_mall.order.entity.OrderEntity;
 import com.swimshop.swim_mall.order.entity.OrderItemEntity;
 import com.swimshop.swim_mall.order.repository.OrderItemRepository;
 import com.swimshop.swim_mall.common.enums.DeliveryStatus;
+import com.swimshop.swim_mall.common.enums.OrderStatus;
+import com.swimshop.swim_mall.common.enums.ReturnStatus;
+import com.swimshop.swim_mall.common.enums.SettlementStatus;
 import com.swimshop.swim_mall.partner.dto.DeactivationRequestDto;
 import com.swimshop.swim_mall.partner.dto.OptionDto;
 import com.swimshop.swim_mall.partner.dto.PartnerHistoryResponseDto;
@@ -46,18 +52,27 @@ import com.swimshop.swim_mall.partner.dto.PartnerApplicationRequestDto;
 import com.swimshop.swim_mall.partner.dto.PartnerApplicationResponseDto;
 import com.swimshop.swim_mall.partner.dto.PartnerChangeRequestCreateDto;
 import com.swimshop.swim_mall.partner.dto.PartnerChangeRequestResponseDto;
-import com.swimshop.swim_mall.partner.dto.PartnerHistoryResponseDto;
 import com.swimshop.swim_mall.partner.dto.PartnerProfileResponseDto;
 import com.swimshop.swim_mall.partner.dto.PartnerProfileUpdateRequestDto;
 import com.swimshop.swim_mall.partner.dto.ProductCreateRequestDto;
 import com.swimshop.swim_mall.partner.dto.ProductUpdateRequestDto;
 import com.swimshop.swim_mall.partner.dto.PartnerSalesStatisticsDto;
+import com.swimshop.swim_mall.partner.dto.PartnerDashboardAnalyticsDto;
+import com.swimshop.swim_mall.partner.dto.PartnerTodayOperationsDto;
+import com.swimshop.swim_mall.delivery.repository.DeliveryRepository;
+import com.swimshop.swim_mall.payment.PaymentEntity;
+import com.swimshop.swim_mall.payment.PaymentRepository;
+import com.swimshop.swim_mall.settlement.dto.SettlementSummaryDto;
+import com.swimshop.swim_mall.settlement.repository.SettlementRepository;
+import com.swimshop.swim_mall.settlement.service.SettlementService;
 import com.swimshop.swim_mall.partner.dto.ProductWithOptionsDto;
 import com.swimshop.swim_mall.partner.entity.PartnerEntity;
 import com.swimshop.swim_mall.partner.entity.PartnerChangeRequestEntity;
 import com.swimshop.swim_mall.partner.entity.PartnerHistoryEntity;
 import com.swimshop.swim_mall.partner.entity.PartnerProfileEntity;
 import com.swimshop.swim_mall.partner.repository.PartnerChangeRequestRepository;
+import com.swimshop.swim_mall.inventory.repository.InventoryRepository;
+import com.swimshop.swim_mall.return_order.repository.ReturnRepository;
 import com.swimshop.swim_mall.partner.repository.PartnerHistoryRepository;
 import com.swimshop.swim_mall.partner.repository.PartnerProfileRepository;
 import com.swimshop.swim_mall.partner.repository.PartnerRepository;
@@ -68,11 +83,15 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class PartnerService {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     
     private final OptionRepository optionRepository;
     private final PartnerRepository partnerRepository;
@@ -83,9 +102,23 @@ public class PartnerService {
     private final CustomerRepository customerRepository;
     private final PasswordEncoder passwordEncoder;
     private final AdminRepository adminRepository;
+    private final ColorRepository colorRepository;
     private final OrderItemRepository orderItemRepository;
     private final PartnerProfileRepository partnerProfileRepository;
     private final PartnerChangeRequestRepository partnerChangeRequestRepository;
+    private final InventoryRepository inventoryRepository;
+    private final ReturnRepository returnRepository;
+    private final PaymentRepository paymentRepository;
+    private final SettlementService settlementService;
+    private final SettlementRepository settlementRepository;
+    private final DeliveryRepository deliveryRepository;
+
+    private static final int PARTNER_LOW_STOCK_THRESHOLD = 5;
+    private static final int PARTNER_TREND_MIN_DAYS = 7;
+    private static final int PARTNER_TREND_MAX_DAYS = 30;
+    private static final int PARTNER_ANALYTICS_TREND_MIN_DAYS = 7;
+    private static final int PARTNER_ANALYTICS_TREND_MAX_DAYS = 90;
+    private static final int PARTNER_DELIVERY_READY_DELAY_DAYS = 3;
     
     /**
      * 현재 로그인한 파트너의 상품 목록 조회 (상품 단위로 그룹화)
@@ -162,6 +195,14 @@ public class PartnerService {
                     product.getProductPrice(),
                     product.getProductDescription(),
                     product.getProductImageUrl(),
+                    product.getSku(),
+                    product.getBrandName(),
+                    product.getMaterialInfo(),
+                    product.getOriginCountry(),
+                    product.getManufactureCountry(),
+                    product.getCareInstructions(),
+                    product.getSizeGuideText(),
+                    product.getSizeGuideJson(),
                     product.getProductCreatedAt(),
                     product.getProductUpdatedAt(),
                     product.getProductActiveStatus() != null ? product.getProductActiveStatus().name() : null,
@@ -183,6 +224,14 @@ public class PartnerService {
                     product.getProductPrice(),
                     product.getProductDescription(),
                     product.getProductImageUrl(),
+                    product.getSku(),
+                    product.getBrandName(),
+                    product.getMaterialInfo(),
+                    product.getOriginCountry(),
+                    product.getManufactureCountry(),
+                    product.getCareInstructions(),
+                    product.getSizeGuideText(),
+                    product.getSizeGuideJson(),
                     product.getProductCreatedAt(),
                     product.getProductUpdatedAt(),
                     product.getProductActiveStatus() != null ? product.getProductActiveStatus().name() : null,
@@ -194,6 +243,312 @@ public class PartnerService {
         }
         
         return result;
+    }
+
+    /**
+     * 파트너 대시보드 — 오늘의 운영(결제·발송 전 주문·승인 대기 상품/옵션)
+     */
+    @Transactional(readOnly = true)
+    public PartnerTodayOperationsDto getPartnerTodayOperations(HttpSession session, int trendDays) {
+        Long partnerId = getCurrentPartnerId(session);
+        LocalDate today = LocalDate.now();
+        LocalDateTime dayStart = today.atStartOfDay();
+        LocalDateTime dayEndExclusive = today.plusDays(1).atStartOfDay();
+        List<OrderStatus> paidOrActive = List.of(OrderStatus.PAID, OrderStatus.ACTIVE);
+
+        long todayPaidOrders = orderItemRepository.countDistinctPartnerOrdersPaidBetween(
+                partnerId, dayStart, dayEndExclusive, paidOrActive);
+        long todayRevenue = orderItemRepository.sumPartnerLineRevenuePaidBetween(
+                partnerId, dayStart, dayEndExclusive, paidOrActive);
+        long preShipmentOrders = orderItemRepository.countDistinctPartnerOrdersPreShipment(
+                partnerId, paidOrActive, DeliveryStatus.READY);
+
+        long productsPendingNew = productRepository.countByPartner_PartnerIdAndProductActiveStatus(
+                partnerId, ActiveStatus.PENDING);
+        long productsPendingUpdate = productRepository.countByPartner_PartnerIdAndProductActiveStatus(
+                partnerId, ActiveStatus.PENDING_UPDATE);
+        long optionsPendingNew = optionRepository.countByPartner_PartnerIdAndOptionStatus(
+                partnerId, ActiveStatus.PENDING);
+        long optionsPendingUpdate = optionRepository.countByPartner_PartnerIdAndOptionStatus(
+                partnerId, ActiveStatus.PENDING_UPDATE);
+
+        long lowStockLines = inventoryRepository.countLowStockLinesForPartner(
+                partnerId, PARTNER_LOW_STOCK_THRESHOLD, ActiveStatus.ACTIVE);
+        List<ReturnStatus> openReturnStatuses = List.of(
+                ReturnStatus.REQUESTED,
+                ReturnStatus.APPROVED,
+                ReturnStatus.PICKUP_COMPLETED);
+        long returnsOpen = returnRepository.countByPartnerIdAndReturnStatusIn(partnerId, openReturnStatuses);
+
+        int trendDaysClamped = Math.min(PARTNER_TREND_MAX_DAYS, Math.max(PARTNER_TREND_MIN_DAYS, trendDays));
+        List<PartnerTodayOperationsDto.DailyPaidTrendPointDto> dailyTrend =
+                buildPartnerDailyPaidTrend(partnerId, today, trendDaysClamped, paidOrActive, null);
+
+        SettlementSummaryDto readySummary = settlementService.getPartnerSettlementReadySummary(session);
+        long readySettlementAmount = readySummary.getTotalSettlementAmount() != null
+                ? readySummary.getTotalSettlementAmount()
+                : 0L;
+        long readySalesAmount = readySummary.getTotalSalesAmount() != null
+                ? readySummary.getTotalSalesAmount()
+                : 0L;
+        int readyLineCount = readySummary.getSettlementReadyCount() != null
+                ? readySummary.getSettlementReadyCount()
+                : 0;
+
+        long pendingBatchCount = settlementRepository.countByPartner_PartnerIdAndSettlementStatus(
+                partnerId, SettlementStatus.PENDING);
+        long pendingBatchAmount = settlementRepository.sumSettlementAmountByPartnerAndStatus(
+                partnerId, SettlementStatus.PENDING);
+
+        return PartnerTodayOperationsDto.builder()
+                .todayPaidDistinctOrderCount(todayPaidOrders)
+                .todayPartnerLineRevenueKrw(todayRevenue)
+                .ordersPreShipmentDistinctCount(preShipmentOrders)
+                .productsPendingNewApprovalCount(productsPendingNew)
+                .productsPendingUpdateApprovalCount(productsPendingUpdate)
+                .optionsPendingNewApprovalCount(optionsPendingNew)
+                .optionsPendingUpdateApprovalCount(optionsPendingUpdate)
+                .lowStockThresholdUsed(PARTNER_LOW_STOCK_THRESHOLD)
+                .lowStockLineCount(lowStockLines)
+                .returnsOpenCount(returnsOpen)
+                .trendDays(trendDaysClamped)
+                .dailyPaidTrend(dailyTrend)
+                .settlementReadyTotalSettlementAmountKrw(readySettlementAmount)
+                .settlementReadyTotalSalesAmountKrw(readySalesAmount)
+                .settlementReadyLineCount(readyLineCount)
+                .pendingSettlementBatchCount(pendingBatchCount)
+                .pendingSettlementBatchAmountKrw(pendingBatchAmount)
+                .build();
+    }
+
+    /**
+     * 파트너 매출·운영 분석(기간 7~90일, 선택 상품번호로 일별·기간 합계 필터)
+     */
+    @Transactional(readOnly = true)
+    public PartnerDashboardAnalyticsDto getPartnerDashboardAnalytics(
+            HttpSession session,
+            int trendDays,
+            Long productNo
+    ) {
+        Long partnerId = getCurrentPartnerId(session);
+        Long productNoFilter = null;
+        if (productNo != null) {
+            ProductEntity p = productRepository.findById(productNo)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+            if (p.getPartner() == null || !partnerId.equals(p.getPartner().getPartnerId())) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+            productNoFilter = productNo;
+        }
+
+        LocalDate today = LocalDate.now();
+        List<OrderStatus> paidOrActive = List.of(OrderStatus.PAID, OrderStatus.ACTIVE);
+        int trendDaysClamped = Math.min(PARTNER_ANALYTICS_TREND_MAX_DAYS,
+                Math.max(PARTNER_ANALYTICS_TREND_MIN_DAYS, trendDays));
+        LocalDateTime rangeStart = today.minusDays(trendDaysClamped - 1L).atStartOfDay();
+        LocalDateTime rangeEndExclusive = today.plusDays(1).atStartOfDay();
+
+        List<PartnerTodayOperationsDto.DailyPaidTrendPointDto> trendRaw =
+                buildPartnerDailyPaidTrend(partnerId, today, trendDaysClamped, paidOrActive, productNoFilter);
+        List<PartnerDashboardAnalyticsDto.DailyPaidTrendPointDto> dailyTrend = trendRaw.stream()
+                .map(pt -> PartnerDashboardAnalyticsDto.DailyPaidTrendPointDto.builder()
+                        .date(pt.getDate())
+                        .paidOrderCount(pt.getPaidOrderCount())
+                        .paidRevenueKrw(pt.getPaidRevenueKrw())
+                        .build())
+                .collect(Collectors.toList());
+
+        long periodOrders;
+        long periodRev;
+        if (productNoFilter == null) {
+            periodOrders = orderItemRepository.countDistinctPartnerOrdersPaidBetween(
+                    partnerId, rangeStart, rangeEndExclusive, paidOrActive);
+            periodRev = orderItemRepository.sumPartnerLineRevenuePaidBetween(
+                    partnerId, rangeStart, rangeEndExclusive, paidOrActive);
+        } else {
+            periodOrders = orderItemRepository.countDistinctPartnerOrdersPaidBetweenForProduct(
+                    partnerId, rangeStart, rangeEndExclusive, paidOrActive, productNoFilter);
+            periodRev = orderItemRepository.sumPartnerLineRevenuePaidBetweenForProduct(
+                    partnerId, rangeStart, rangeEndExclusive, paidOrActive, productNoFilter);
+        }
+
+        List<Object[]> aggRows = orderItemRepository.aggregatePartnerLineSalesByProductBetween(
+                partnerId, rangeStart, rangeEndExclusive, paidOrActive);
+        List<PartnerDashboardAnalyticsDto.ProductSkuPerformanceDto> topProducts = new ArrayList<>();
+        int rank = 0;
+        for (Object[] row : aggRows) {
+            if (row == null || row.length < 5) {
+                continue;
+            }
+            long pno = ((Number) row[0]).longValue();
+            if (productNoFilter != null && pno != productNoFilter) {
+                continue;
+            }
+            String pname = row[1] != null ? String.valueOf(row[1]) : "";
+            String sku = row[2] != null ? String.valueOf(row[2]) : "";
+            long qty = row[3] instanceof Number ? ((Number) row[3]).longValue() : 0L;
+            long rev = row[4] instanceof Number ? ((Number) row[4]).longValue() : 0L;
+            topProducts.add(PartnerDashboardAnalyticsDto.ProductSkuPerformanceDto.builder()
+                    .productNo(pno)
+                    .productName(pname)
+                    .sku(sku)
+                    .quantitySold(qty)
+                    .lineRevenueKrw(rev)
+                    .build());
+            rank++;
+            if (rank >= 12) {
+                break;
+            }
+        }
+
+        long productsPendingNew = productRepository.countByPartner_PartnerIdAndProductActiveStatus(
+                partnerId, ActiveStatus.PENDING);
+        long productsPendingUpdate = productRepository.countByPartner_PartnerIdAndProductActiveStatus(
+                partnerId, ActiveStatus.PENDING_UPDATE);
+        long optionsPendingNew = optionRepository.countByPartner_PartnerIdAndOptionStatus(
+                partnerId, ActiveStatus.PENDING);
+        long optionsPendingUpdate = optionRepository.countByPartner_PartnerIdAndOptionStatus(
+                partnerId, ActiveStatus.PENDING_UPDATE);
+
+        long lowStockLines = inventoryRepository.countLowStockLinesForPartner(
+                partnerId, PARTNER_LOW_STOCK_THRESHOLD, ActiveStatus.ACTIVE);
+        long outOfStockLines = inventoryRepository.countOutOfStockLinesForPartner(partnerId, ActiveStatus.ACTIVE);
+
+        long preShipmentOrders = orderItemRepository.countDistinctPartnerOrdersPreShipment(
+                partnerId, paidOrActive, DeliveryStatus.READY);
+        long inDeliveryOrders = orderItemRepository.countDistinctPartnerOrdersInDelivery(
+                partnerId, paidOrActive, DeliveryStatus.SHIPPED);
+        LocalDateTime deliveryDelayBefore = LocalDateTime.now().minusDays(PARTNER_DELIVERY_READY_DELAY_DAYS);
+        long delayedReady = deliveryRepository.countReadyDeliveryConfirmedBeforeForPartner(
+                DeliveryStatus.READY, paidOrActive, deliveryDelayBefore, partnerId);
+
+        SettlementSummaryDto readySummary = settlementService.getPartnerSettlementReadySummary(session);
+        long readySettlementAmount = readySummary.getTotalSettlementAmount() != null
+                ? readySummary.getTotalSettlementAmount()
+                : 0L;
+        long readySalesAmount = readySummary.getTotalSalesAmount() != null
+                ? readySummary.getTotalSalesAmount()
+                : 0L;
+        int readyLineCount = readySummary.getSettlementReadyCount() != null
+                ? readySummary.getSettlementReadyCount()
+                : 0;
+        long pendingBatchCount = settlementRepository.countByPartner_PartnerIdAndSettlementStatus(
+                partnerId, SettlementStatus.PENDING);
+        long pendingBatchAmount = settlementRepository.sumSettlementAmountByPartnerAndStatus(
+                partnerId, SettlementStatus.PENDING);
+
+        long returnsInPeriod = returnRepository.countPartnerReturnsRequestedBetween(
+                partnerId, rangeStart, rangeEndExclusive);
+        List<Object[]> reasonRows = returnRepository.countPartnerReturnsByReasonTypeBetween(
+                partnerId, rangeStart, rangeEndExclusive);
+        List<PartnerDashboardAnalyticsDto.ReturnReasonCountDto> reasonBreakdown = new ArrayList<>();
+        for (Object[] rr : reasonRows) {
+            if (rr == null || rr.length < 2 || rr[0] == null) {
+                continue;
+            }
+            reasonBreakdown.add(PartnerDashboardAnalyticsDto.ReturnReasonCountDto.builder()
+                    .reasonType(String.valueOf(rr[0]))
+                    .count(((Number) rr[1]).longValue())
+                    .build());
+        }
+
+        List<ReturnStatus> openReturnStatuses = List.of(
+                ReturnStatus.REQUESTED,
+                ReturnStatus.APPROVED,
+                ReturnStatus.PICKUP_COMPLETED);
+        long returnsOpen = returnRepository.countByPartnerIdAndReturnStatusIn(partnerId, openReturnStatuses);
+
+        return PartnerDashboardAnalyticsDto.builder()
+                .trendDays(trendDaysClamped)
+                .productNoFilter(productNoFilter)
+                .dailyPaidTrend(dailyTrend)
+                .periodPaidDistinctOrderCount(periodOrders)
+                .periodPartnerLineRevenueKrw(periodRev)
+                .topProductsByLineRevenue(topProducts)
+                .productsPendingNewApprovalCount(productsPendingNew)
+                .productsPendingUpdateApprovalCount(productsPendingUpdate)
+                .optionsPendingNewApprovalCount(optionsPendingNew)
+                .optionsPendingUpdateApprovalCount(optionsPendingUpdate)
+                .lowStockThresholdUsed(PARTNER_LOW_STOCK_THRESHOLD)
+                .lowStockLineCount(lowStockLines)
+                .outOfStockLineCount(outOfStockLines)
+                .ordersPreShipmentDistinctCount(preShipmentOrders)
+                .ordersInDeliveryDistinctCount(inDeliveryOrders)
+                .deliveryReadyDelayedDaysThreshold(PARTNER_DELIVERY_READY_DELAY_DAYS)
+                .deliveriesReadyDelayedPartnerLineCount(delayedReady)
+                .settlementReadyTotalSettlementAmountKrw(readySettlementAmount)
+                .settlementReadyTotalSalesAmountKrw(readySalesAmount)
+                .settlementReadyLineCount(readyLineCount)
+                .pendingSettlementBatchCount(pendingBatchCount)
+                .pendingSettlementBatchAmountKrw(pendingBatchAmount)
+                .returnsRequestedInPeriod(returnsInPeriod)
+                .returnReasonBreakdownInPeriod(reasonBreakdown)
+                .returnsOpenCount(returnsOpen)
+                .build();
+    }
+
+    private List<PartnerTodayOperationsDto.DailyPaidTrendPointDto> buildPartnerDailyPaidTrend(
+            Long partnerId,
+            LocalDate today,
+            int trendDays,
+            List<OrderStatus> paidOrActive,
+            Long productNoFilter
+    ) {
+        LocalDateTime rangeStart = today.minusDays(trendDays - 1L).atStartOfDay();
+        LocalDateTime rangeEndExclusive = today.plusDays(1).atStartOfDay();
+        List<PaymentEntity> raw = paymentRepository.findPartnerRelatedPaidPaymentsBetween(
+                partnerId, rangeStart, rangeEndExclusive, paidOrActive);
+        Map<Long, PaymentEntity> uniqPay = new LinkedHashMap<>();
+        for (PaymentEntity p : raw) {
+            if (p.getPaymentNo() != null) {
+                uniqPay.putIfAbsent(p.getPaymentNo(), p);
+            }
+        }
+        Map<LocalDate, Set<Long>> ordersByDay = new TreeMap<>();
+        Map<LocalDate, Long> revenueByDay = new TreeMap<>();
+        for (PaymentEntity p : uniqPay.values()) {
+            if (p.getPaidAt() == null || p.getOrder() == null) {
+                continue;
+            }
+            LocalDate d = p.getPaidAt().toLocalDate();
+            long lineSum = sumPartnerLinesOnOrder(p.getOrder(), partnerId, productNoFilter);
+            if (lineSum <= 0) {
+                continue;
+            }
+            revenueByDay.merge(d, lineSum, Long::sum);
+            ordersByDay.computeIfAbsent(d, k -> new java.util.HashSet<>()).add(p.getOrder().getOrderNo());
+        }
+        List<PartnerTodayOperationsDto.DailyPaidTrendPointDto> out = new ArrayList<>();
+        LocalDate c = today.minusDays(trendDays - 1L);
+        while (!c.isAfter(today)) {
+            Set<Long> orders = ordersByDay.getOrDefault(c, Collections.emptySet());
+            long rev = revenueByDay.getOrDefault(c, 0L);
+            out.add(PartnerTodayOperationsDto.DailyPaidTrendPointDto.builder()
+                    .date(c)
+                    .paidOrderCount(orders.size())
+                    .paidRevenueKrw(rev)
+                    .build());
+            c = c.plusDays(1);
+        }
+        return out;
+    }
+
+    private static long sumPartnerLinesOnOrder(OrderEntity order, Long partnerId, Long productNoFilter) {
+        return order.getOrderItems().stream()
+                .filter(oi -> !Boolean.TRUE.equals(oi.getIsCancelled()))
+                .filter(oi -> partnerOwnsOrderItem(oi, partnerId))
+                .filter(oi -> productNoFilter == null
+                        || (oi.getProduct() != null && productNoFilter.equals(oi.getProduct().getProductNo())))
+                .mapToLong(OrderItemEntity::getItemTotalPrice)
+                .sum();
+    }
+
+    private static boolean partnerOwnsOrderItem(OrderItemEntity oi, Long partnerId) {
+        if (oi.getOption() != null && oi.getOption().getPartner() != null) {
+            return partnerId.equals(oi.getOption().getPartner().getPartnerId());
+        }
+        return oi.getProduct() != null && oi.getProduct().getPartner() != null
+                && partnerId.equals(oi.getProduct().getPartner().getPartnerId());
     }
     
     /**
@@ -353,6 +708,134 @@ public class PartnerService {
         String v = trimToNull(value);
         return v == null ? null : v.toUpperCase();
     }
+
+    private String resolvePartnerBrandName(PartnerEntity partner) {
+        return trimToNull(partner.getRepresentativeBrandCode());
+    }
+
+    private String normalizeOptionColorCode(String rawColorCode) {
+        String colorCode = normalizeUpper(rawColorCode);
+        if (colorCode == null) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "옵션 컬러는 필수입니다.");
+        }
+        return colorRepository.findById(colorCode)
+                .filter(color -> Boolean.TRUE.equals(color.getIsActive()))
+                .map(color -> color.getCode())
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_REQUEST, "유효하지 않거나 비활성화된 컬러 코드입니다: " + colorCode));
+    }
+
+    private boolean ownsAnyRequestedOption(Long partnerId, Long productNo, List<ProductUpdateRequestDto.OptionUpdateRequestDto> requestedOptions) {
+        if (requestedOptions == null || requestedOptions.isEmpty()) return false;
+        return requestedOptions.stream()
+                .map(ProductUpdateRequestDto.OptionUpdateRequestDto::getOptionNo)
+                .filter(optionNo -> optionNo != null)
+                .anyMatch(optionNo -> optionRepository.findById(optionNo)
+                        .filter(option -> option.getProduct() != null && productNo.equals(option.getProduct().getProductNo()))
+                        .filter(option -> option.getPartner() != null && partnerId.equals(option.getPartner().getPartnerId()))
+                        .isPresent());
+    }
+
+    private String generateSku(LocalDateTime createdAt, Long productNo) {
+        String ym = createdAt.format(java.time.format.DateTimeFormatter.ofPattern("yyyyMM"));
+        return String.format("SWM-%s-%06d", ym, productNo);
+    }
+
+    private String normalizeSizeGuideJson(String rawJson, ProductType productType, ProductSubType productSubType) {
+        if (rawJson == null || rawJson.isBlank()) return null;
+        String expectedTemplate = resolveTemplateKey(productType, productSubType);
+        if (expectedTemplate == null) return null;
+
+        Map<String, Object> root;
+        try {
+            root = OBJECT_MAPPER.readValue(rawJson, new TypeReference<Map<String, Object>>() {});
+        } catch (JsonProcessingException e) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "사이즈표 JSON 형식이 올바르지 않습니다.");
+        }
+
+        String templateKey = root.get("templateKey") instanceof String ? (String) root.get("templateKey") : null;
+        if (templateKey == null || !expectedTemplate.equals(templateKey)) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "상품 유형에 맞는 sizeGuide 템플릿이 아닙니다.");
+        }
+
+        Object rowsObj = root.get("rows");
+        if (!(rowsObj instanceof List<?> rows) || rows.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "사이즈표 rows는 1개 이상이어야 합니다.");
+        }
+
+        Set<String> allowedMetrics = allowedMetricsByTemplate(templateKey);
+        Set<String> seenLabels = new LinkedHashSet<>();
+        List<Map<String, Object>> normalizedRows = new ArrayList<>();
+
+        for (Object rowObj : rows) {
+            if (!(rowObj instanceof Map<?, ?> row)) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST, "사이즈표 row 형식이 올바르지 않습니다.");
+            }
+            String sizeLabel = row.get("sizeLabel") instanceof String ? ((String) row.get("sizeLabel")).trim() : null;
+            if (sizeLabel == null || sizeLabel.isEmpty()) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST, "사이즈표의 sizeLabel은 필수입니다.");
+            }
+            if (!seenLabels.add(sizeLabel)) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST, "사이즈표에 중복 sizeLabel이 있습니다.");
+            }
+
+            Map<String, Object> normalizedRow = new LinkedHashMap<>();
+            normalizedRow.put("sizeLabel", sizeLabel);
+            for (String metric : allowedMetrics) {
+                normalizedRow.put(metric, normalizePositiveNumber(row.get(metric)));
+            }
+            normalizedRows.add(normalizedRow);
+        }
+
+        Map<String, Object> normalizedRoot = new LinkedHashMap<>();
+        normalizedRoot.put("templateKey", templateKey);
+        normalizedRoot.put("rows", normalizedRows);
+        try {
+            return OBJECT_MAPPER.writeValueAsString(normalizedRoot);
+        } catch (JsonProcessingException e) {
+            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR, "사이즈표 JSON 직렬화에 실패했습니다.");
+        }
+    }
+
+    private Double normalizePositiveNumber(Object value) {
+        if (value == null) return null;
+        if (value instanceof Number n) {
+            double v = n.doubleValue();
+            if (v <= 0) throw new BusinessException(ErrorCode.INVALID_REQUEST, "사이즈 수치는 0보다 커야 합니다.");
+            return v;
+        }
+        if (value instanceof String s) {
+            String trimmed = s.trim();
+            if (trimmed.isEmpty()) return null;
+            try {
+                double v = Double.parseDouble(trimmed);
+                if (v <= 0) throw new BusinessException(ErrorCode.INVALID_REQUEST, "사이즈 수치는 0보다 커야 합니다.");
+                return v;
+            } catch (NumberFormatException e) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST, "사이즈 수치 형식이 올바르지 않습니다.");
+            }
+        }
+        throw new BusinessException(ErrorCode.INVALID_REQUEST, "사이즈 수치 형식이 올바르지 않습니다.");
+    }
+
+    private Set<String> allowedMetricsByTemplate(String templateKey) {
+        return switch (templateKey) {
+            case "SWIMSUIT_MEN_PANTS" -> new LinkedHashSet<>(List.of("waistCm", "hipCm"));
+            case "SWIMSUIT_WOMEN_ONEPIECE" -> new LinkedHashSet<>(List.of("chestCm", "waistCm", "hipCm", "torsoCm"));
+            case "SWIMSUIT_WOMEN_BIKINI" -> new LinkedHashSet<>(List.of("chestCm", "waistCm", "hipCm"));
+            case "FINS_SIZE" -> new LinkedHashSet<>(List.of("footLengthCm"));
+            default -> Collections.emptySet();
+        };
+    }
+
+    private String resolveTemplateKey(ProductType productType, ProductSubType productSubType) {
+        if (productType == ProductType.FINS) return "FINS_SIZE";
+        if (productType == ProductType.SWIMSUIT_MEN) return "SWIMSUIT_MEN_PANTS";
+        if (productType == ProductType.SWIMSUIT_WOMEN) {
+            if (productSubType == ProductSubType.BIKINI) return "SWIMSUIT_WOMEN_BIKINI";
+            return "SWIMSUIT_WOMEN_ONEPIECE";
+        }
+        return null;
+    }
     
     /**
      * 파트너 상품 등록 (상품 + 옵션들)
@@ -399,6 +882,9 @@ public class PartnerService {
         
         // 4. 상품 생성 (PENDING 상태로 생성 - 관리자 승인 필요)
         LocalDateTime now = LocalDateTime.now();
+        String normalizedSizeGuideJson = normalizeSizeGuideJson(
+                requestDto.getSizeGuideJson(), productType, productSubType
+        );
         ProductEntity product = ProductEntity.builder()
                 .productName(requestDto.getProductName())
                 .productType(productType)
@@ -406,6 +892,14 @@ public class PartnerService {
                 .productPrice(requestDto.getProductPrice())
                 .productDescription(requestDto.getProductDescription())
                 .productImageUrl(requestDto.getProductImageUrl())
+                .sku(null)
+                .brandName(resolvePartnerBrandName(partner))
+                .materialInfo(requestDto.getMaterialInfo())
+                .originCountry(requestDto.getOriginCountry())
+                .manufactureCountry(requestDto.getManufactureCountry())
+                .careInstructions(requestDto.getCareInstructions())
+                .sizeGuideText(requestDto.getSizeGuideText())
+                .sizeGuideJson(normalizedSizeGuideJson)
                 .productCreatedAt(now)
                 .productUpdatedAt(null)
                 .productActiveStatus(ActiveStatus.PENDING) // 승인 대기 상태로 생성
@@ -413,14 +907,17 @@ public class PartnerService {
                 .build();
         
         product = productRepository.save(product);
+        product.setSku(generateSku(now, product.getProductNo()));
+        product = productRepository.save(product);
         
         // 5. 옵션들 생성 (PENDING 상태로 생성 - 관리자 승인 필요)
         List<OptionDto> optionDtos = new ArrayList<>();
         for (ProductCreateRequestDto.OptionCreateRequestDto optionRequest : requestDto.getOptions()) {
+            String normalizedColorCode = normalizeOptionColorCode(optionRequest.getColor());
             OptionEntity option = OptionEntity.builder()
                     .product(product)
                     .partner(partner)
-                    .color(optionRequest.getColor())
+                    .color(normalizedColorCode)
                     .size(optionRequest.getSize())
                     .optionAddPrice(optionRequest.getOptionAddPrice())
                     .optionStatus(ActiveStatus.PENDING) // 옵션 상태를 PENDING으로 설정
@@ -444,6 +941,14 @@ public class PartnerService {
                 product.getProductPrice(),
                 product.getProductDescription(),
                 product.getProductImageUrl(),
+                product.getSku(),
+                product.getBrandName(),
+                product.getMaterialInfo(),
+                product.getOriginCountry(),
+                product.getManufactureCountry(),
+                product.getCareInstructions(),
+                product.getSizeGuideText(),
+                product.getSizeGuideJson(),
                 product.getProductCreatedAt(),
                 product.getProductUpdatedAt(),
                 product.getProductActiveStatus().name(),
@@ -489,7 +994,9 @@ public class PartnerService {
                         && opt.getPartner().getPartnerId().equals(partnerId));
         
         // 3-3. 둘 중 하나라도 소유권이 있으면 통과
-        boolean isOwner = isOwnerByProduct || isOwnerByOption;
+        // 레거시 데이터에서 상품 파트너 연결이 누락된 경우를 위해, 요청 optionNo 기준 소유권도 보조 확인
+        boolean isOwnerByRequestedOption = ownsAnyRequestedOption(partnerId, productNo, requestDto.getOptions());
+        boolean isOwner = isOwnerByProduct || isOwnerByOption || isOwnerByRequestedOption;
         
         if (!isOwner) {
             throw new BusinessException(ErrorCode.FORBIDDEN, 
@@ -542,6 +1049,9 @@ public class PartnerService {
             productType,
             productSubType,
             requestDto.getProductPrice()
+        );
+        String normalizedSizeGuideJson = normalizeSizeGuideJson(
+                requestDto.getSizeGuideJson(), productType, productSubType
         );
         
         // 8. 상태 결정 및 상품 정보 업데이트
@@ -598,6 +1108,14 @@ public class PartnerService {
             requestDto.getProductPrice(),
             requestDto.getProductDescription(),
             requestDto.getProductImageUrl(),
+            product.getSku(),
+            resolvePartnerBrandName(partner),
+            requestDto.getMaterialInfo(),
+            requestDto.getOriginCountry(),
+            requestDto.getManufactureCountry(),
+            requestDto.getCareInstructions(),
+            requestDto.getSizeGuideText(),
+            normalizedSizeGuideJson,
             newStatus
         );
         
@@ -644,6 +1162,7 @@ public class PartnerService {
         // 옵션 상태 결정: 상품 상태 + 옵션 변경 여부에 따라 결정
         List<OptionDto> optionDtos = new ArrayList<>();
         for (ProductUpdateRequestDto.OptionUpdateRequestDto optionRequest : requestDto.getOptions()) {
+            String normalizedColorCode = normalizeOptionColorCode(optionRequest.getColor());
             OptionEntity option;
             ActiveStatus finalOptionStatus;
             
@@ -659,7 +1178,7 @@ public class PartnerService {
                 
                 // 옵션 변경 여부 확인 (색상, 사이즈, 추가 가격)
                 boolean optionChanged = option.hasCriticalFieldsChanged(
-                    optionRequest.getColor(),
+                    normalizedColorCode,
                     optionRequest.getSize(),
                     optionRequest.getOptionAddPrice()
                 );
@@ -708,7 +1227,7 @@ public class PartnerService {
                 
                 // 옵션 정보 업데이트
                 option.update(
-                        optionRequest.getColor(),
+                        normalizedColorCode,
                         optionRequest.getSize(),
                         optionRequest.getOptionAddPrice(),
                         finalOptionStatus
@@ -746,7 +1265,7 @@ public class PartnerService {
                 option = OptionEntity.builder()
                         .product(updatedProduct)
                         .partner(partner)
-                        .color(optionRequest.getColor())
+                        .color(normalizedColorCode)
                         .size(optionRequest.getSize())
                         .optionAddPrice(optionRequest.getOptionAddPrice())
                         .optionStatus(finalOptionStatus)
@@ -801,6 +1320,14 @@ public class PartnerService {
                 updatedProduct.getProductPrice(),
                 updatedProduct.getProductDescription(),
                 updatedProduct.getProductImageUrl(),
+                updatedProduct.getSku(),
+                updatedProduct.getBrandName(),
+                updatedProduct.getMaterialInfo(),
+                updatedProduct.getOriginCountry(),
+                updatedProduct.getManufactureCountry(),
+                updatedProduct.getCareInstructions(),
+                updatedProduct.getSizeGuideText(),
+                updatedProduct.getSizeGuideJson(),
                 updatedProduct.getProductCreatedAt(),
                 updatedProduct.getProductUpdatedAt(),
                 updatedProduct.getProductActiveStatus().name(),
@@ -973,6 +1500,14 @@ public class PartnerService {
                 product.getProductPrice(),
                 product.getProductDescription(),
                 product.getProductImageUrl(),
+                product.getSku(),
+                product.getBrandName(),
+                product.getMaterialInfo(),
+                product.getOriginCountry(),
+                product.getManufactureCountry(),
+                product.getCareInstructions(),
+                product.getSizeGuideText(),
+                product.getSizeGuideJson(),
                 product.getProductCreatedAt(),
                 product.getProductUpdatedAt(),
                 product.getProductActiveStatus().name(),
@@ -1071,6 +1606,14 @@ public class PartnerService {
                 product.getProductPrice(),
                 product.getProductDescription(),
                 product.getProductImageUrl(),
+                product.getSku(),
+                product.getBrandName(),
+                product.getMaterialInfo(),
+                product.getOriginCountry(),
+                product.getManufactureCountry(),
+                product.getCareInstructions(),
+                product.getSizeGuideText(),
+                product.getSizeGuideJson(),
                 product.getProductCreatedAt(),
                 product.getProductUpdatedAt(),
                 product.getProductActiveStatus().name(),

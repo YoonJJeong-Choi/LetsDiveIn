@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
-import { Card, Table, Button, Modal, message, Tag, Space, Row, Col, Select, Descriptions, Rate, Image, Input, Statistic, Form, Popconfirm, DatePicker, InputNumber, Spin, Tabs, Radio } from 'antd';
-import { CommentOutlined, EyeOutlined, StarOutlined, UserOutlined, ShoppingCartOutlined, DeleteOutlined, EditOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { Card, Table, Button, Modal, message, Tag, Space, Row, Col, Select, Descriptions, Rate, Image, Input, Statistic, Form, Popconfirm, DatePicker, Spin, Tabs, Segmented, Typography, Alert, Tooltip } from 'antd';
+import { CommentOutlined, EyeOutlined, StarOutlined, UserOutlined, ShoppingCartOutlined, DeleteOutlined, EditOutlined, ThunderboltOutlined, CalendarOutlined } from '@ant-design/icons';
 import ReviewService from 'services/ReviewService';
 import PartnerService from 'services/PartnerService';
 
@@ -50,11 +50,12 @@ const ReviewManagement = () => {
 	const [selectedProductNos, setSelectedProductNos] = useState([]);
 	const [selectedOptionNos, setSelectedOptionNos] = useState([]);
 	const [dateRange, setDateRange] = useState([]);
-	const MAX_REVIEW_SAMPLE = 20;
-	const [maxReviews, setMaxReviews] = useState(20);
+	const [analysisDateMode, setAnalysisDateMode] = useState('latest');
+	/** 서버 `ai.review-analysis` 설정과 동기화(첫 후보 조회 응답으로 갱신) */
+	const [aiSampleMeta, setAiSampleMeta] = useState({ recentCountDefault: 3, minimumRequired: 3, hardCap: 10, requestedLimit: 3 });
 	const [reviewTabKey, setReviewTabKey] = useState('list');
-	/** 'single' = 한 옵션만 분석(권장), 'multi' = 선택한 옵션들을 한 번에 묶어 분석 */
-	const [optionAnalysisMode, setOptionAnalysisMode] = useState('single');
+	/** whole=모든 옵션 합산, one=옵션 1개만, some=직접 고른 여러 옵션 */
+	const [aiOptionScope, setAiOptionScope] = useState('whole');
 
 	const renderOptionLabel = (opt) => {
 		if (!opt) return '-';
@@ -365,6 +366,17 @@ const ReviewManagement = () => {
 		return { productNo: pn, product: prod, hasOptions: hasOpts };
 	}, [products, selectedProductNos]);
 
+	// 옵션 범위가 "전체"일 때: 상품의 모든 optionNo를 자동 선택 (수동 multi와 동일한 API 파라미터)
+	useEffect(() => {
+		if (userRole !== 'PARTNER') return;
+		if (aiOptionScope !== 'whole') return;
+		const prod = analysisProductMeta.product;
+		if (!prod || !Array.isArray(prod.options) || prod.options.length === 0) return;
+		const nos = prod.options.map((o) => o?.optionNo).filter((v) => v != null && v !== '');
+		if (nos.length === 0) return;
+		setSelectedOptionNos(nos);
+	}, [userRole, aiOptionScope, analysisProductMeta.product]);
+
 	const handleAnalyzeReviews = async (options = {}) => {
 		const { isRetry = false } = options;
 		if (userRole !== 'PARTNER') {
@@ -380,46 +392,76 @@ const ReviewManagement = () => {
 				return;
 			}
 			const { hasOptions: apHasOptions } = analysisProductMeta;
-			if (apHasOptions && optionAnalysisMode === 'single' && selectedOptionNos.length !== 1) {
+			if (apHasOptions && aiOptionScope === 'one' && selectedOptionNos.length !== 1) {
 				message.warning('분석할 옵션을 한 가지 선택해주세요.');
 				setAnalysisLoading(false);
 				return;
 			}
-			if (apHasOptions && optionAnalysisMode === 'multi' && selectedOptionNos.length < 1) {
-				message.warning('묶어 분석할 옵션을 한 개 이상 선택해주세요.');
+			if (apHasOptions && aiOptionScope === 'some' && selectedOptionNos.length < 1) {
+				message.warning('분석에 포함할 옵션을 한 개 이상 선택해주세요.');
+				setAnalysisLoading(false);
+				return;
+			}
+			if (apHasOptions && aiOptionScope === 'whole' && selectedOptionNos.length < 1) {
+				message.warning('옵션 목록을 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+				setAnalysisLoading(false);
+				return;
+			}
+			if (analysisDateMode === 'range' && !(Array.isArray(dateRange) && dateRange.length === 2 && dateRange[0] && dateRange[1])) {
+				message.warning('기간 지정 모드에서는 시작일과 종료일을 선택해주세요.');
 				setAnalysisLoading(false);
 				return;
 			}
 
-			let filtered = [...locallyFiltered];
-			const pset = new Set(selectedProductNos);
-			filtered = filtered.filter(r => pset.has(r?.productNo));
-			if (selectedOptionNos && selectedOptionNos.length > 0) {
-				const oset = new Set(selectedOptionNos);
-				filtered = filtered.filter(r => r?.optionNo != null && oset.has(r.optionNo));
+			const productNo = selectedProductNos[0];
+			const cparams = { productNo };
+			if (apHasOptions && selectedOptionNos?.length > 0) {
+				cparams.optionNos = selectedOptionNos;
 			}
-			const cap = Math.min(
-				MAX_REVIEW_SAMPLE,
-				Number.isFinite(Number(maxReviews)) ? Number(maxReviews) : MAX_REVIEW_SAMPLE
-			);
-			const sourceReviews = filtered.slice(0, cap);
-			if (sourceReviews.length < MIN_ANALYSIS_REVIEWS) {
-				message.warning(`리뷰 AI 분석은 최소 ${MIN_ANALYSIS_REVIEWS}건 이상 필요합니다. (현재 ${sourceReviews.length}건)`);
+			if (analysisDateMode === 'range' && Array.isArray(dateRange) && dateRange.length === 2 && dateRange[0] && dateRange[1]) {
+				cparams.fromAt = new Date(dateRange[0].toDate()).toISOString().slice(0, 19);
+				cparams.toAt = new Date(dateRange[1].toDate()).toISOString().slice(0, 19);
+			}
+
+			const candResp = await ReviewService.getPartnerReviewAiCandidates(cparams);
+			if (candResp?.success === false) {
+				const msg = candResp?.message || '분석 대상 리뷰를 불러오지 못했습니다.';
+				message.error(msg);
 				setAnalysisLoading(false);
 				return;
 			}
-			try {
-				const uniqueProducts = new Set(sourceReviews.map(r => r?.productNo).filter(v => v !== null && v !== undefined));
-				if (uniqueProducts.size > 1) {
-					message.error('단일 상품만 분석할 수 있습니다.');
-					setAnalysisLoading(false);
-					return;
-				}
-			} catch (_) {}
+			const candPayload = candResp?.data ?? candResp;
+			const sourceReviews = Array.isArray(candPayload?.reviews) ? candPayload.reviews : [];
+			const meta = candPayload?.meta || {};
+			if (Number.isFinite(Number(meta.recentCountDefault))) {
+				setAiSampleMeta({
+					recentCountDefault: Number(meta.recentCountDefault),
+					minimumRequired: Number.isFinite(Number(meta.minimumRequired))
+						? Number(meta.minimumRequired)
+						: MIN_ANALYSIS_REVIEWS,
+					hardCap: Number.isFinite(Number(meta.hardCap)) ? Number(meta.hardCap) : 10,
+					requestedLimit: Number.isFinite(Number(meta.requestedLimit))
+						? Number(meta.requestedLimit)
+						: Number(meta.recentCountDefault) || 3
+				});
+			}
+			const minimumRequired = Number.isFinite(Number(meta.minimumRequired))
+				? Number(meta.minimumRequired)
+				: MIN_ANALYSIS_REVIEWS;
+
+			if (sourceReviews.length < minimumRequired) {
+				message.warning(`리뷰 AI 분석은 최소 ${minimumRequired}건 이상 필요합니다. (현재 ${sourceReviews.length}건)`);
+				setAnalysisLoading(false);
+				return;
+			}
+
+			const cap = Number.isFinite(Number(meta.requestedLimit))
+				? Number(meta.requestedLimit)
+				: sourceReviews.length;
 
 			// 날짜 범위: UI 선택이 있으면 우선 적용, 없으면 리뷰 데이터 기준 파생
 			let uiFromAt = null, uiToAt = null;
-			if (Array.isArray(dateRange) && dateRange.length === 2 && dateRange[0] && dateRange[1]) {
+			if (analysisDateMode === 'range' && Array.isArray(dateRange) && dateRange.length === 2 && dateRange[0] && dateRange[1]) {
 				uiFromAt = dateRange[0].toDate();
 				uiToAt = dateRange[1].toDate();
 			} else {
@@ -475,8 +517,13 @@ const ReviewManagement = () => {
 		} catch (err) {
 			setAnalysisResult(null);
 			const msg = err?.response?.data?.message || '리뷰 AI 분석 호출 실패';
+			const code = err?.response?.data?.code;
 			setAnalysisErrorMessage(msg);
-			message.error(msg);
+			if (code === 'REVIEW_ANALYSIS_NOT_ENOUGH_REVIEWS') {
+				message.warning(msg);
+			} else {
+				message.error(msg);
+			}
 		} finally {
 			setAnalysisLoading(false);
 		}
@@ -487,12 +534,6 @@ const ReviewManagement = () => {
 		const summary = String(result?.summary || '').trim();
 		const policyTypes = Array.isArray(result?.alerts?.policyTypes) ? result.alerts.policyTypes : [];
 		return summary === '리뷰 분석 일시 불가' || summary.includes('리뷰 분석 일시 불가') || policyTypes.includes('AI_UNAVAILABLE');
-	};
-
-	const formatRatioPercent = (value) => {
-		const n = Number(value);
-		if (!Number.isFinite(n)) return '-';
-		return `${Math.round(n * 100)}%`;
 	};
 
 	const toSeverityLabel = (severity) => {
@@ -515,24 +556,25 @@ const ReviewManagement = () => {
 		return map[key] || key || '이슈';
 	};
 
+	/** 백엔드 ReviewAnalysisService 허용 area 값과 동일 */
 	const toAreaLabel = (area) => {
 		const key = String(area || '').toUpperCase();
 		const map = {
+			DETAIL: '상품 상세',
+			SIZE_GUIDE: '사이즈 가이드',
+			IMAGES: '상품 이미지',
+			PACKAGING: '포장·배송 패키지',
+			FAQ: 'FAQ',
+			CS_MACRO: '고객 안내·상담 문구',
+			INVENTORY: '재고·품절 안내',
+			// 구버전/모델 변형 대비
 			PRODUCT_DETAIL: '상품 상세',
-			CS_TEMPLATE: '고객응대',
-			LOGISTICS: '물류/배송',
+			CS_TEMPLATE: '고객 안내·상담 문구',
+			LOGISTICS: '물류·배송',
 			PRICING: '가격 정책',
 			QUALITY: '품질 개선'
 		};
-		return map[key] || key || '운영';
-	};
-
-	const toConfidenceLabel = (confidence) => {
-		const key = String(confidence || '').toUpperCase();
-		if (key === 'HIGH') return { text: '높음', color: 'green' };
-		if (key === 'MEDIUM') return { text: '보통', color: 'orange' };
-		if (key === 'LOW') return { text: '낮음', color: 'red' };
-		return { text: key || '-', color: 'default' };
+		return map[key] || (key ? `${key} 영역` : '운영');
 	};
 
 	const listToolbarAndTable = (
@@ -634,46 +676,44 @@ const ReviewManagement = () => {
 			title={<Space>리뷰 AI 분석</Space>}
 			extra={
 				(() => {
-					let filtered = [...locallyFiltered];
-					if (selectedProductNos && selectedProductNos.length === 1) {
-						const pset = new Set(selectedProductNos);
-						filtered = filtered.filter(r => pset.has(r?.productNo));
-					}
-					if (selectedOptionNos && selectedOptionNos.length > 0) {
-						const oset = new Set(selectedOptionNos);
-						filtered = filtered.filter(r => r?.optionNo != null && oset.has(r.optionNo));
-					}
-					const capPreview = Math.min(
-						filtered.length,
-						MAX_REVIEW_SAMPLE,
-						Number.isFinite(Number(maxReviews)) ? Number(maxReviews) : MAX_REVIEW_SAMPLE
-					);
-					const candidate = filtered.slice(0, capPreview);
-					const countOk = candidate.length >= MIN_ANALYSIS_REVIEWS;
 					const productOk = analysisProductMeta.productNo != null;
 					const optionOk = !analysisProductMeta.hasOptions
 						? true
-						: optionAnalysisMode === 'single'
-							? selectedOptionNos.length === 1
-							: selectedOptionNos.length >= 1;
-					const readyOk = productOk && optionOk;
+						: aiOptionScope === 'whole'
+							? selectedOptionNos.length >= 1
+							: aiOptionScope === 'one'
+								? selectedOptionNos.length === 1
+								: selectedOptionNos.length >= 1;
+					const dateOk = analysisDateMode !== 'range'
+						? true
+						: Array.isArray(dateRange) && dateRange.length === 2 && dateRange[0] && dateRange[1];
+					const readyOk = productOk && optionOk && dateOk;
 					const disabledReason = !productOk
 						? '상품을 선택해주세요'
 						: !optionOk
-							? (optionAnalysisMode === 'single' ? '옵션을 한 가지 선택해주세요' : '옵션을 한 개 이상 선택해주세요')
-							: !countOk
-								? `최소 ${MIN_ANALYSIS_REVIEWS}건 이상 필요`
-								: null;
+							? (aiOptionScope === 'one'
+								? '옵션을 한 가지 선택해주세요'
+								: aiOptionScope === 'some'
+									? '옵션을 한 개 이상 선택해주세요'
+									: '옵션을 불러오는 중입니다')
+							: !dateOk
+								? '시작일과 종료일을 선택해주세요'
+							: null;
+					const buttonTitle = disabledReason || (
+						analysisDateMode === 'range'
+							? `선택한 기간 안에서 최대 ${aiSampleMeta.requestedLimit || aiSampleMeta.recentCountDefault}건을 불러와 분석합니다.`
+							: `선택 상품 기준 최신 ${aiSampleMeta.requestedLimit || aiSampleMeta.recentCountDefault}건(서버 설정)을 불러와 분석합니다.`
+					);
 					return (
 						<Space>
 							<Button
 								type="primary"
 								loading={analysisLoading}
 								onClick={() => handleAnalyzeReviews()}
-								disabled={analysisLoading || !readyOk || !countOk}
-								title={disabledReason || ''}
+								disabled={analysisLoading || !readyOk}
+								title={buttonTitle}
 							>
-								조회 ({capPreview}건)
+								조회 ({analysisDateMode === 'range' ? '기간 기준' : '최신 기준'})
 							</Button>
 							{isFallbackResult(analysisResult) && (
 								<Button
@@ -692,120 +732,137 @@ const ReviewManagement = () => {
 		>
 			<Spin spinning={analysisLoading}>
 				<Space direction="vertical" size={12} style={{ width: '100%', marginBottom: 8 }}>
-					<Row gutter={[12, 12]}>
-						<Col xs={24} md={12}>
-							<div style={{ fontWeight: 600, marginBottom: 6 }}>기간</div>
-							<RangePicker
-								style={{ width: '100%' }}
-								value={dateRange}
-								onChange={(vals) => setDateRange(vals || [])}
-								placeholder={['시작일', '종료일']}
-							/>
-						</Col>
-						<Col xs={24} md={12}>
-							<div style={{ fontWeight: 600, marginBottom: 6 }}>상품 선택 (필수)</div>
-							<Select
-								allowClear
-								style={{ width: '100%' }}
-								value={selectedProductNos[0]}
-								onChange={(val) => {
-									setSelectedProductNos(val ? [val] : []);
-									setSelectedOptionNos([]);
+					<Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+						기본은 <strong>최신 순</strong>입니다. 기간 선택도 가능합니다.
+					</Typography.Paragraph>
+					<div>
+						<div style={{ fontWeight: 600, marginBottom: 6 }}>① 분석할 상품</div>
+						<Select
+							allowClear
+							style={{ width: '100%', maxWidth: 560 }}
+							value={selectedProductNos[0]}
+							onChange={(val) => {
+								setSelectedProductNos(val ? [val] : []);
+								setSelectedOptionNos([]);
+								setAiOptionScope('whole');
+							}}
+							placeholder="상품을 선택하세요"
+							maxTagCount="responsive"
+						>
+							{(products || []).map((p) => (
+								<Option key={p?.productNo} value={p?.productNo}>
+									{p?.productName || `상품 #${p?.productNo}`}
+								</Option>
+							))}
+						</Select>
+					</div>
+					{analysisProductMeta.productNo && analysisProductMeta.hasOptions ? (
+						<div>
+							<div style={{ fontWeight: 600, marginBottom: 6 }}>② 옵션 범위</div>
+							<Segmented
+								options={[
+									{ label: '전체', value: 'whole' },
+									{ label: '단일', value: 'one' },
+									{ label: '복수', value: 'some' },
+								]}
+								value={aiOptionScope}
+								onChange={(v) => {
+									setAiOptionScope(v);
+									if (v === 'one' || v === 'some') setSelectedOptionNos([]);
 								}}
-								placeholder="분석할 상품을 선택"
-								maxTagCount="responsive"
-							>
-								{(products || []).map((p) => (
-									<Option key={p?.productNo} value={p?.productNo}>
-										{p?.productName || `상품 #${p?.productNo}`}
-									</Option>
-								))}
-							</Select>
-						</Col>
-					</Row>
-					<Row gutter={[12, 12]}>
-						<Col xs={24} md={12}>
-							{analysisProductMeta.productNo && analysisProductMeta.hasOptions ? (
-								<>
-									<div style={{ fontWeight: 600, marginBottom: 6 }}>옵션 분석 범위</div>
-									<Radio.Group
-										value={optionAnalysisMode}
-										onChange={(e) => {
-											setOptionAnalysisMode(e.target.value);
-											setSelectedOptionNos([]);
-										}}
-										style={{ marginBottom: 10 }}
-									>
-										<Radio.Button value="single">한 옵션만 분석</Radio.Button>
-										<Radio.Button value="multi">선택 옵션 묶음</Radio.Button>
-									</Radio.Group>
-									<div style={{ fontWeight: 600, marginBottom: 6 }}>
-										{optionAnalysisMode === 'single' ? '옵션 선택 (한 가지)' : '옵션 선택 (복수)'}
-									</div>
-									{optionAnalysisMode === 'single' ? (
-										<Select
-											allowClear
-											style={{ width: '100%' }}
-											value={selectedOptionNos[0]}
-											onChange={(val) => setSelectedOptionNos(val != null ? [val] : [])}
-											placeholder="분석할 옵션 한 가지를 선택"
-											disabled={!analysisProductMeta.productNo}
-										>
-											{(() => {
-												const prod = analysisProductMeta.product;
-												const options = Array.isArray(prod?.options) ? prod.options : [];
-												return options.map(opt => (
-													<Option key={opt?.optionNo} value={opt?.optionNo}>
-														{renderOptionLabel(opt)}
-													</Option>
-												));
-											})()}
-										</Select>
-									) : (
-										<Select
-											mode="multiple"
-											allowClear
-											style={{ width: '100%' }}
-											value={selectedOptionNos}
-											onChange={(vals) => setSelectedOptionNos(vals)}
-											placeholder="묶어서 분석할 옵션을 한 개 이상 선택"
-											disabled={!analysisProductMeta.productNo}
-											maxTagCount="responsive"
-										>
-											{(() => {
-												const prod = analysisProductMeta.product;
-												const options = Array.isArray(prod?.options) ? prod.options : [];
-												return options.map(opt => (
-													<Option key={opt?.optionNo} value={opt?.optionNo}>
-														{renderOptionLabel(opt)}
-													</Option>
-												));
-											})()}
-										</Select>
-									)}
-								</>
-							) : analysisProductMeta.productNo && !analysisProductMeta.hasOptions ? (
-								<div style={{ color: '#888', paddingTop: 8 }}>
-									이 상품은 옵션이 없습니다. 해당 상품 리뷰만 전송됩니다.
-								</div>
-							) : (
-								<div style={{ color: '#888', paddingTop: 8 }}>
-									상품을 선택하면 옵션 범위를 고를 수 있습니다.
-								</div>
-							)}
-						</Col>
-						<Col xs={24} md={12}>
-							<div style={{ fontWeight: 600, marginBottom: 6 }}>최대 리뷰 수 (최대 {MAX_REVIEW_SAMPLE})</div>
-							<InputNumber
-								min={1}
-								max={MAX_REVIEW_SAMPLE}
-								style={{ width: '100%' }}
-								value={maxReviews}
-								onChange={(v) => setMaxReviews(v ?? MAX_REVIEW_SAMPLE)}
-								placeholder={`기본 ${MAX_REVIEW_SAMPLE}`}
 							/>
-						</Col>
-					</Row>
+							
+							{aiOptionScope === 'one' && (
+								<>
+									<div style={{ fontWeight: 600, marginTop: 10, marginBottom: 6 }}>분석할 옵션</div>
+									<Select
+										allowClear
+										style={{ width: '100%', maxWidth: 560 }}
+										value={selectedOptionNos[0]}
+										onChange={(val) => setSelectedOptionNos(val != null ? [val] : [])}
+										placeholder="옵션 한 가지를 선택하세요"
+										disabled={!analysisProductMeta.productNo}
+									>
+										{(Array.isArray(analysisProductMeta.product?.options) ? analysisProductMeta.product.options : []).map((opt) => (
+											<Option key={opt?.optionNo} value={opt?.optionNo}>
+												{renderOptionLabel(opt)}
+											</Option>
+										))}
+									</Select>
+								</>
+							)}
+							{aiOptionScope === 'some' && (
+								<>
+									<div style={{ fontWeight: 600, marginTop: 10, marginBottom: 6 }}>포함할 옵션 (복수)</div>
+									<Select
+										mode="multiple"
+										allowClear
+										style={{ width: '100%', maxWidth: 560 }}
+										value={selectedOptionNos}
+										onChange={(vals) => setSelectedOptionNos(vals)}
+										placeholder="옵션을 한 개 이상 선택하세요"
+										disabled={!analysisProductMeta.productNo}
+										maxTagCount="responsive"
+									>
+										{(Array.isArray(analysisProductMeta.product?.options) ? analysisProductMeta.product.options : []).map((opt) => (
+											<Option key={opt?.optionNo} value={opt?.optionNo}>
+												{renderOptionLabel(opt)}
+											</Option>
+										))}
+									</Select>
+								</>
+							)}
+						</div>
+					) : analysisProductMeta.productNo && !analysisProductMeta.hasOptions ? (
+						<Alert type="info" showIcon message="옵션이 없는 상품입니다. 이 상품의 리뷰만 대상으로 합니다." />
+					) : (
+						<div style={{ color: '#888' }}>상품을 먼저 선택하세요.</div>
+					)}
+					<div
+						style={{
+							background: '#fafafa',
+							border: '1px solid #f0f0f0',
+							borderRadius: 10,
+							padding: 14
+						}}
+					>
+						<div style={{ fontWeight: 600, marginBottom: 8 }}>③ 리뷰 범위</div>
+						<Space direction="vertical" size={10} style={{ width: '100%' }}>
+							<Segmented
+								options={[
+									{ label: '최신', value: 'latest' },
+									{ label: '기간 지정', value: 'range' },
+								]}
+								value={analysisDateMode}
+								onChange={(v) => setAnalysisDateMode(v)}
+							/>
+							{analysisDateMode === 'latest' ? (
+								<Alert
+									type="info"
+									showIcon
+									icon={<CalendarOutlined />}
+									message={`최신 리뷰만 ${aiSampleMeta.recentCountDefault}건 분석합니다.`}
+								/>
+							) : (
+								<Space direction="vertical" size={10} style={{ width: '100%' }}>
+									<Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+										선택한 범위 안에서 리뷰를 분석합니다다.
+									</Typography.Paragraph>
+									<RangePicker
+										style={{ width: '100%', maxWidth: 400 }}
+										value={dateRange}
+										onChange={(vals) => setDateRange(vals || [])}
+										placeholder={['시작일', '종료일']}
+									/>
+									<Tag color={Array.isArray(dateRange) && dateRange.length === 2 && dateRange[0] && dateRange[1] ? 'blue' : 'default'} style={{ width: 'fit-content' }}>
+										{Array.isArray(dateRange) && dateRange.length === 2 && dateRange[0] && dateRange[1]
+											? `${dateRange[0].format('YYYY-MM-DD')} ~ ${dateRange[1].format('YYYY-MM-DD')}`
+											: '기간을 선택해주세요'}
+									</Tag>
+								</Space>
+							)}
+						</Space>
+					</div>
 				</Space>
 				{analysisResult ? (
 					<Space direction="vertical" size={8} style={{ width: '100%' }}>
@@ -813,44 +870,26 @@ const ReviewManagement = () => {
 							<>
 								<Tag color="red">AI 분석 일시 불가</Tag>
 								<div style={{ color: '#cf1322', fontWeight: 600 }}>
-									일시적인 AI 응답 문제로 기본 안내만 표시 중입니다. 잠시 후 재시도해주세요.
+									일시적인 AI 응답 문제가 발생했습니다. 잠시 후 재시도해주세요.
 								</div>
 								<div>
 									<strong>요약</strong>
 									<div>{analysisResult?.summary || '-'}</div>
 								</div>
-								<Card size="small" title="요약 정보(축약)">
-									<div>신뢰도: {analysisResult?.confidence ?? '-'}</div>
-									<div>
-										권장 조치: {Array.isArray(analysisResult?.actions) && analysisResult.actions.length > 0
-											? (analysisResult.actions[0]?.recommendation || '-')
-											: '-'}
+								<Card size="small" title="안내">
+									<div style={{ color: '#666' }}>
+										{Array.isArray(analysisResult?.actions) && analysisResult.actions.length > 0
+											? (analysisResult.actions[0]?.recommendation || '잠시 후 다시 시도해주세요.')
+											: '잠시 후 다시 시도해주세요.'}
 									</div>
 								</Card>
 							</>
 						) : (
 							<>
-								<Tag color="green">정상 분석 응답</Tag>
 								<div>
 									<strong>요약</strong>
 									<div>{analysisResult?.summary || '-'}</div>
 								</div>
-								<Row gutter={[16, 8]}>
-									<Col xs={24} md={12}>
-										<Card size="small" title="감성 비율">
-											<div>긍정: {formatRatioPercent(analysisResult?.sentiment?.positive ?? analysisResult?.sentiment?.positiveRatio)}</div>
-											<div>부정: {formatRatioPercent(analysisResult?.sentiment?.negative ?? analysisResult?.sentiment?.negativeRatio)}</div>
-											<div>중립: {formatRatioPercent(analysisResult?.sentiment?.neutral ?? analysisResult?.sentiment?.neutralRatio)}</div>
-										</Card>
-									</Col>
-									<Col xs={24} md={12}>
-										<Card size="small" title="신뢰도">
-											<Tag color={toConfidenceLabel(analysisResult?.confidence).color}>
-												{toConfidenceLabel(analysisResult?.confidence).text}
-											</Tag>
-										</Card>
-									</Col>
-								</Row>
 								<Row gutter={[16, 8]}>
 									<Col xs={24} md={12}>
 										<Card size="small" title="주요 이슈">
@@ -870,17 +909,23 @@ const ReviewManagement = () => {
 										</Card>
 									</Col>
 									<Col xs={24} md={12}>
-										<Card size="small" title="권장 액션">
+										<Card
+											size="small"
+											title="AI 권장 조치"
+											extra={(
+												<Tooltip title="선택한 리뷰 샘플을 읽고, 파트너 운영에 참고할 만한 개선 아이디어를 제안한 것입니다. 실행 여부는 직접 판단해 주세요.">
+													<span style={{ color: '#999', cursor: 'help', fontSize: 12 }}>?</span>
+												</Tooltip>
+											)}
+										>
+											<Typography.Paragraph type="secondary" style={{ marginBottom: 12, fontSize: 13 }}>
+												위 줄은 <strong>어느 영역</strong>을 손보면 좋을지, 그 아래는 <strong>무엇을 하면 좋을지</strong>입니다.
+											</Typography.Paragraph>
 											{Array.isArray(analysisResult?.actions) && analysisResult.actions.length > 0 ? (
 												analysisResult.actions.map((action, idx) => (
-													<div key={`action-${idx}`} style={{ marginBottom: 10, paddingBottom: 8, borderBottom: '1px dashed #f0f0f0' }}>
-														<div style={{ marginBottom: 4 }}>
-															<Tag color="blue">{toAreaLabel(action?.area)}</Tag>
-															<Tag color={toSeverityLabel(action?.expectedImpact).color}>
-																영향도 {toSeverityLabel(action?.expectedImpact).text}
-															</Tag>
-														</div>
-														<div>{action?.recommendation || action?.title || action?.action || action?.description || '-'}</div>
+													<div key={`action-${idx}`} style={{ marginBottom: 12, paddingBottom: 10, borderBottom: '1px dashed #f0f0f0' }}>
+														<div style={{ marginBottom: 6, fontWeight: 600 }}>{toAreaLabel(action?.area)}</div>
+														<div style={{ lineHeight: 1.6 }}>{action?.recommendation || action?.title || action?.action || action?.description || '-'}</div>
 													</div>
 												))
 											) : (
@@ -894,8 +939,7 @@ const ReviewManagement = () => {
 					</Space>
 				) : (
 					<div style={{ color: '#888' }}>
-						현재 필터·상품·옵션·기간 조건에 맞는 리뷰(최대 {MAX_REVIEW_SAMPLE}건까지 전송)를 기준으로 분석합니다. 최소 {MIN_ANALYSIS_REVIEWS}건 이상일 때 조회 가능합니다.
-						{analysisErrorMessage ? ` (최근 오류: ${analysisErrorMessage})` : ''}
+						기본은 <strong>최신 {aiSampleMeta.recentCountDefault}건</strong>입니다. {aiSampleMeta.minimumRequired || MIN_ANALYSIS_REVIEWS}건 미만이면 분석할 수 없습니다.
 					</div>
 				)}
 			</Spin>
@@ -1024,12 +1068,12 @@ const ReviewManagement = () => {
 						<Descriptions.Item label="상품 정보">
 							<Space>
 								<Image
-									src={selectedReview.productImageUrl || '/img/placeholder.png'}
+									src={selectedReview.productImageUrl || '/img/LetsDiveIn03.png'}
 									alt={selectedReview.productName}
 									width={80}
 									height={80}
 									style={{ objectFit: 'cover', borderRadius: 4 }}
-									fallback="/img/placeholder.png"
+									fallback="/img/LetsDiveIn03.png"
 								/>
 								<div>
 									<div style={{ fontWeight: 500, fontSize: 16 }}>

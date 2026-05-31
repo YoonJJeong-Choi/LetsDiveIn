@@ -1,34 +1,21 @@
-export const socialLinks = [
-  { href: "#", className: "social-facebook", iconClass: "icon-fb" },
-  { href: "#", className: "social-twiter", iconClass: "icon-x" },
-  { href: "#", className: "social-instagram", iconClass: "icon-instagram" },
-  { href: "#", className: "social-tiktok", iconClass: "icon-tiktok" },
-  { href: "#", className: "social-amazon", iconClass: "icon-amazon" },
-  { href: "#", className: "social-pinterest", iconClass: "icon-pinterest" },
-];
-
 export const footerLinks = [
   {
-    heading: "Infomation",
+    heading: "쇼핑몰 정보",
     items: [
-      { label: "About Us", href: "/about-us", isLink: true },
-      { label: "Our Stories", href: "#", isLink: false },
-      { label: "Size Guide", href: "#", isLink: false },
-      { label: "Contact us", href: "/contact", isLink: true },
-      { label: "Career", href: "#", isLink: false },
-      { label: "My Account", href: "/my-account", isLink: true },
+      { label: "회사 소개", href: "/about-us", isLink: true },
+      { label: "마이페이지", href: "/my-account", isLink: true },
       { label: "파트너 입점 신청", href: "/partner-application", isLink: true },
     ],
   },
   {
-    heading: "Customer Services",
+    heading: "고객 지원",
     items: [
-      { label: "Shipping", href: "#", isLink: false },
-      { label: "Return & Refund", href: "#", isLink: false },
-      { label: "Privacy Policy", href: "#", isLink: false },
-      { label: "Terms & Conditions", href: "/term-of-use", isLink: true },
-      { label: "Orders FAQs", href: "/FAQs", isLink: true },
-      { label: "My Wishlist", href: "/wish-list", isLink: true },
+      { label: "배송 안내", href: "/delivery-info", isLink: true },
+      { label: "반품 및 환불", href: "/returns-refunds", isLink: true },
+      { label: "개인정보 처리방침", href: "/privacy-policy", isLink: true },
+      { label: "이용약관", href: "/term-of-use", isLink: true },
+      { label: "자주 묻는 질문", href: "/FAQs", isLink: true },
+      { label: "1:1 QnA", href: "/qna", isLink: true },
     ],
   },
 ];

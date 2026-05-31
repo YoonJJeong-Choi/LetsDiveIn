@@ -5,21 +5,30 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.DayOfWeek;
 import java.util.Comparator;
-import java.util.HashMap;
-import java.util.Map;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import com.swimshop.swim_mall.account.dto.AuthLoginResponseDto;
 import com.swimshop.swim_mall.account.entity.AccountEntity;
 import com.swimshop.swim_mall.account.repository.AccountRepository;
 import com.swimshop.swim_mall.admin.dto.AdminBootstrapRequestDto;
+import com.swimshop.swim_mall.admin.dto.AdminDashboardQueueDto;
+import com.swimshop.swim_mall.admin.dto.AdminDashboardHealthDto;
+import com.swimshop.swim_mall.admin.dto.AdminDashboardAnalyticsDto;
+import com.swimshop.swim_mall.admin.dto.AdminDashboardInsightsDto;
 import com.swimshop.swim_mall.admin.entity.AdminEntity;
 import com.swimshop.swim_mall.admin.repository.AdminRepository;
 import com.swimshop.swim_mall.brand.entity.BrandEntity;
@@ -62,6 +71,7 @@ import com.swimshop.swim_mall.order.entity.OrderEntity;
 import com.swimshop.swim_mall.order.entity.OrderItemEntity;
 import com.swimshop.swim_mall.order.repository.OrderRepository;
 import com.swimshop.swim_mall.order.repository.OrderItemRepository;
+import com.swimshop.swim_mall.payment.PaymentEntity;
 import com.swimshop.swim_mall.payment.PaymentRepository;
 import com.swimshop.swim_mall.common.enums.DeliveryStatus;
 import com.swimshop.swim_mall.common.enums.ProductType;
@@ -70,6 +80,9 @@ import com.swimshop.swim_mall.review.repository.ReviewRepository;
 import com.swimshop.swim_mall.return_order.entity.ReturnEntity;
 import com.swimshop.swim_mall.return_order.repository.ReturnRepository;
 import com.swimshop.swim_mall.common.enums.OrderStatus;
+import com.swimshop.swim_mall.common.enums.ReturnStatus;
+import com.swimshop.swim_mall.common.enums.SettlementStatus;
+import com.swimshop.swim_mall.delivery.repository.DeliveryRepository;
 
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
@@ -125,6 +138,7 @@ public class AdminService {
     private final OrderItemRepository orderItemRepository;
     private final ReviewRepository reviewRepository;
     private final ReturnRepository returnRepository;
+    private final DeliveryRepository deliveryRepository;
     private final BrandRepository brandRepository;
     private final com.swimshop.swim_mall.payment.PaymentRepository paymentRepository;
     private final CustomerHistoryRepository customerHistoryRepository;
@@ -134,6 +148,7 @@ public class AdminService {
     private final com.swimshop.swim_mall.customer.reopository.CustomerTagMappingRepository customerTagMappingRepository;
     private final com.swimshop.swim_mall.customer.reopository.CustomerActivityLogRepository customerActivityLogRepository;
     private final CustomerGradeRepository customerGradeRepository;
+    private final com.swimshop.swim_mall.settlement.repository.SettlementRepository settlementRepository;
 
     /**
      * 최초 관리자 1명만 생성. 이미 Admin이 있으면 예외.
@@ -168,6 +183,445 @@ public class AdminService {
                 account // Account를 생성 시 바로 전달
         );
         adminRepository.save(admin);
+    }
+
+    private static final int DELIVERY_READY_DELAY_DAYS = 3;
+
+    /**
+     * 관리자 대시보드 — 처리 큐(알림형) 집계
+     */
+    @Transactional(readOnly = true)
+    public AdminDashboardQueueDto getAdminDashboardQueue() {
+        List<OrderStatus> paidOrActive = List.of(OrderStatus.PAID, OrderStatus.ACTIVE);
+        List<ReturnStatus> returnProcessing = List.of(
+                ReturnStatus.REQUESTED,
+                ReturnStatus.APPROVED,
+                ReturnStatus.PICKUP_COMPLETED);
+        LocalDateTime deliveryDelayBefore = LocalDateTime.now().minusDays(DELIVERY_READY_DELAY_DAYS);
+
+        return AdminDashboardQueueDto.builder()
+                .pendingPartnerApplications(partnerRepository.countByPartnerStatus(PartnerStatus.PENDING))
+                .productsPendingNewApproval(productRepository.countByProductActiveStatus(ActiveStatus.PENDING))
+                .productsPendingUpdateApproval(productRepository.countByProductActiveStatus(ActiveStatus.PENDING_UPDATE))
+                .optionsPendingNewApproval(optionRepository.countByOptionStatus(ActiveStatus.PENDING))
+                .optionsPendingUpdateApproval(optionRepository.countByOptionStatus(ActiveStatus.PENDING_UPDATE))
+                .returnsPendingProcessing(returnRepository.countByReturnStatusIn(returnProcessing))
+                .ordersPendingPayment(orderRepository.countByOrderStatus(OrderStatus.PENDING_PAYMENT))
+                .ordersPaymentFailed(orderRepository.countByOrderStatus(OrderStatus.PAYMENT_FAILED))
+                .orderItemsPendingConfirmation(orderItemRepository.countPendingConfirmation(paidOrActive))
+                .deliveriesReadyDelayedDaysThreshold(DELIVERY_READY_DELAY_DAYS)
+                .deliveriesReadyDelayed(deliveryRepository.countReadyDeliveryConfirmedBefore(
+                        DeliveryStatus.READY,
+                        paidOrActive,
+                        deliveryDelayBefore))
+                .build();
+    }
+
+    /**
+     * 관리자 대시보드 — 전체 헬스(요약)
+     * 매출·주문 건수: 결제 승인(paidAt) 기준. 신규 회원: 고객 생성일 기준.
+     */
+    @Transactional(readOnly = true)
+    public AdminDashboardHealthDto getAdminDashboardHealth() {
+        LocalDate today = LocalDate.now();
+        LocalDateTime startToday = today.atStartOfDay();
+        LocalDateTime endToday = today.plusDays(1).atStartOfDay();
+        LocalDateTime startLast7 = today.minusDays(6).atStartOfDay();
+
+        long paidTodayCount = paymentRepository.countDistinctPaidOrdersBetween(startToday, endToday);
+        long paid7Count = paymentRepository.countDistinctPaidOrdersBetween(startLast7, endToday);
+        long revToday = paymentRepository.sumPaidAmountBetween(startToday, endToday);
+        long rev7 = paymentRepository.sumPaidAmountBetween(startLast7, endToday);
+
+        long newToday = customerRepository.countCreatedBetween(startToday, endToday);
+        long new7 = customerRepository.countCreatedBetween(startLast7, endToday);
+        long verifiedTotal = customerRepository.countByEmailCheckedTrue();
+
+        long partners = partnerRepository.countByPartnerStatus(PartnerStatus.APPROVED);
+        long productsTotal = productRepository.count();
+        long productsActive = productRepository.countByProductActiveStatus(ActiveStatus.ACTIVE);
+
+        return AdminDashboardHealthDto.builder()
+                .paidOrdersTodayCount(paidTodayCount)
+                .paidOrdersLast7DaysCount(paid7Count)
+                .paidRevenueTodayKrw(revToday)
+                .paidRevenueLast7DaysKrw(rev7)
+                .newCustomersTodayCount(newToday)
+                .newCustomersLast7DaysCount(new7)
+                .emailVerifiedCustomersTotal(verifiedTotal)
+                .activePartnersCount(partners)
+                .totalProductsCount(productsTotal)
+                .activeProductsCount(productsActive)
+                .build();
+    }
+
+    private static final int INSIGHTS_TREND_MIN_DAYS = 14;
+    private static final int INSIGHTS_TREND_MAX_DAYS = 30;
+    private static final int ANALYTICS_TREND_MIN_DAYS = 7;
+    private static final int ANALYTICS_TREND_MAX_DAYS = 90;
+    private static final int INSIGHTS_TOP_PRODUCTS = 10;
+    private static final int INSIGHTS_SHARE_MAX_SLICES = 10;
+    private static final int INSIGHTS_RECENT_ROWS = 8;
+
+    /**
+     * 관리자 대시보드 — 추이·랭킹·최근 주문/반품·정산 요약 (결제 완료 paidAt 기준)
+     *
+     * @param trendDays 일별 추이 구간 길이 (14~30, 그 외는 경계로 보정)
+     */
+    @Transactional(readOnly = true)
+    public AdminDashboardInsightsDto getAdminDashboardInsights(int trendDays) {
+        return buildDashboardInsights(trendDays, INSIGHTS_TREND_MIN_DAYS, INSIGHTS_TREND_MAX_DAYS);
+    }
+
+    /**
+     * 관리자 분석 대시보드 — 긴 추이·파트너·시간대·요일·7일 비교·이행 큐 (집계)
+     *
+     * @param trendDays 일별 추이 구간 (7~90)
+     */
+    @Transactional(readOnly = true)
+    public AdminDashboardAnalyticsDto getAdminDashboardAnalytics(int trendDays) {
+        AdminDashboardInsightsDto insights = buildDashboardInsights(
+                trendDays, ANALYTICS_TREND_MIN_DAYS, ANALYTICS_TREND_MAX_DAYS);
+        AdminDashboardQueueDto queue = getAdminDashboardQueue();
+
+        LocalDate today = LocalDate.now();
+        int trendUsed = insights.getTrendDays();
+        LocalDateTime rangeStart = today.minusDays(trendUsed - 1L).atStartOfDay();
+        LocalDateTime rangeEndExclusive = today.plusDays(1).atStartOfDay();
+
+        List<PaymentEntity> payments = paymentRepository.findPaidPaymentsBetween(rangeStart, rangeEndExclusive);
+        long[] hourCounts = new long[24];
+        EnumMap<DayOfWeek, long[]> weekdayAgg = new EnumMap<>(DayOfWeek.class);
+        for (DayOfWeek d : DayOfWeek.values()) {
+            weekdayAgg.put(d, new long[] {0L, 0L});
+        }
+        Set<Long> paidOrderNos = new HashSet<>();
+        for (PaymentEntity p : payments) {
+            if (p.getOrder() == null || p.getPaidAt() == null) {
+                continue;
+            }
+            paidOrderNos.add(p.getOrder().getOrderNo());
+            int h = p.getPaidAt().getHour();
+            hourCounts[h]++;
+            long[] wd = weekdayAgg.get(p.getPaidAt().getDayOfWeek());
+            wd[0] += p.getPaymentAmount();
+            wd[1]++;
+        }
+
+        List<AdminDashboardAnalyticsDto.HourPaymentCountDto> hourDtos = new ArrayList<>();
+        for (int h = 0; h < 24; h++) {
+            hourDtos.add(AdminDashboardAnalyticsDto.HourPaymentCountDto.builder()
+                    .hourOfDay(h)
+                    .paymentCount(hourCounts[h])
+                    .build());
+        }
+
+        List<AdminDashboardAnalyticsDto.WeekdayRevenueDto> weekdayDtos = new ArrayList<>();
+        for (DayOfWeek d : List.of(
+                DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY,
+                DayOfWeek.FRIDAY, DayOfWeek.SATURDAY, DayOfWeek.SUNDAY)) {
+            long[] a = weekdayAgg.getOrDefault(d, new long[] {0L, 0L});
+            weekdayDtos.add(AdminDashboardAnalyticsDto.WeekdayRevenueDto.builder()
+                    .weekdayLabel(weekdayLabelKo(d))
+                    .paidRevenueKrw(a[0])
+                    .paymentCount(a[1])
+                    .build());
+        }
+
+        long returnsInPeriod = returnRepository.countByReturnRequestedAtBetween(rangeStart, rangeEndExclusive);
+        long paidDistinct = paidOrderNos.size();
+        double ratio = paidDistinct <= 0 ? 0.0
+                : Math.round(returnsInPeriod * 10000.0 / paidDistinct) / 10000.0;
+
+        List<AdminDashboardAnalyticsDto.PartnerLineRevenueRankDto> topPartners =
+                buildTopPartnersByLineRevenue(paidOrderNos);
+
+        LocalDateTime endExclusive = today.plusDays(1).atStartOfDay();
+        LocalDateTime last7Start = today.minusDays(6).atStartOfDay();
+        LocalDateTime prior7Start = today.minusDays(13).atStartOfDay();
+        long last7Rev = paymentRepository.sumPaidAmountBetween(last7Start, endExclusive);
+        long prior7Rev = paymentRepository.sumPaidAmountBetween(prior7Start, last7Start);
+        long last7Cnt = paymentRepository.countDistinctPaidOrdersBetween(last7Start, endExclusive);
+        long prior7Cnt = paymentRepository.countDistinctPaidOrdersBetween(prior7Start, last7Start);
+
+        AdminDashboardAnalyticsDto.SevenDayComparisonDto cmp = AdminDashboardAnalyticsDto.SevenDayComparisonDto.builder()
+                .last7PaidRevenueKrw(last7Rev)
+                .prior7PaidRevenueKrw(prior7Rev)
+                .last7PaidOrderCount(last7Cnt)
+                .prior7PaidOrderCount(prior7Cnt)
+                .build();
+
+        return AdminDashboardAnalyticsDto.builder()
+                .insights(insights)
+                .fulfillmentQueue(queue)
+                .sevenDayVsPriorSeven(cmp)
+                .topPartnersByLineRevenue(topPartners)
+                .paidPaymentCountByHour(hourDtos)
+                .paidRevenueByWeekday(weekdayDtos)
+                .returnsRequestedInTrendPeriod(returnsInPeriod)
+                .paidDistinctOrdersInTrendPeriod(paidDistinct)
+                .returnRequestsPerPaidOrder(ratio)
+                .build();
+    }
+
+    private List<AdminDashboardAnalyticsDto.PartnerLineRevenueRankDto> buildTopPartnersByLineRevenue(Set<Long> paidOrderNos) {
+        if (paidOrderNos.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, Long> revByPartner = new HashMap<>();
+        Map<Long, String> nameByPartner = new HashMap<>();
+        List<OrderEntity> orders = orderRepository.findByOrderNoInWithItemsAndProduct(paidOrderNos);
+        for (OrderEntity order : orders) {
+            for (OrderItemEntity oi : order.getOrderItems()) {
+                if (Boolean.TRUE.equals(oi.getIsCancelled())) {
+                    continue;
+                }
+                PartnerEntity par = resolveSellingPartner(oi);
+                if (par == null) {
+                    continue;
+                }
+                long line = oi.getItemTotalPrice();
+                revByPartner.merge(par.getPartnerId(), line, Long::sum);
+                nameByPartner.putIfAbsent(par.getPartnerId(), par.getPartnerName());
+            }
+        }
+        List<Map.Entry<Long, Long>> sorted = revByPartner.entrySet().stream()
+                .sorted((a, b) -> Long.compare(b.getValue(), a.getValue()))
+                .limit(INSIGHTS_TOP_PRODUCTS)
+                .collect(Collectors.toList());
+        List<AdminDashboardAnalyticsDto.PartnerLineRevenueRankDto> out = new ArrayList<>();
+        int rank = 1;
+        for (Map.Entry<Long, Long> e : sorted) {
+            out.add(AdminDashboardAnalyticsDto.PartnerLineRevenueRankDto.builder()
+                    .rank(rank++)
+                    .partnerId(e.getKey())
+                    .partnerName(nameByPartner.getOrDefault(e.getKey(), ""))
+                    .lineRevenueKrw(e.getValue())
+                    .build());
+        }
+        return out;
+    }
+
+    private PartnerEntity resolveSellingPartner(OrderItemEntity oi) {
+        if (oi.getOption() != null && oi.getOption().getPartner() != null) {
+            return oi.getOption().getPartner();
+        }
+        if (oi.getProduct() != null && oi.getProduct().getPartner() != null) {
+            return oi.getProduct().getPartner();
+        }
+        return null;
+    }
+
+    private static String weekdayLabelKo(DayOfWeek dow) {
+        return switch (dow) {
+            case MONDAY -> "월";
+            case TUESDAY -> "화";
+            case WEDNESDAY -> "수";
+            case THURSDAY -> "목";
+            case FRIDAY -> "금";
+            case SATURDAY -> "토";
+            case SUNDAY -> "일";
+        };
+    }
+
+    private AdminDashboardInsightsDto buildDashboardInsights(int trendDays, int minDays, int maxDays) {
+        int days = Math.min(maxDays, Math.max(minDays, trendDays));
+        LocalDate today = LocalDate.now();
+        LocalDateTime rangeStart = today.minusDays(days - 1L).atStartOfDay();
+        LocalDateTime rangeEndExclusive = today.plusDays(1).atStartOfDay();
+
+        List<PaymentEntity> paymentsInRange = paymentRepository.findPaidPaymentsBetween(rangeStart, rangeEndExclusive);
+
+        TreeMap<LocalDate, Map<Long, Long>> paidByDayAndOrder = new TreeMap<>();
+        Set<Long> paidOrderNos = new HashSet<>();
+        for (PaymentEntity p : paymentsInRange) {
+            if (p.getOrder() == null || p.getPaidAt() == null) {
+                continue;
+            }
+            LocalDate d = p.getPaidAt().toLocalDate();
+            Long orderNo = p.getOrder().getOrderNo();
+            paidOrderNos.add(orderNo);
+            paidByDayAndOrder
+                    .computeIfAbsent(d, k -> new HashMap<>())
+                    .merge(orderNo, p.getPaymentAmount(), Long::sum);
+        }
+
+        List<AdminDashboardInsightsDto.DailyPaidTrendPointDto> dailyTrend = new ArrayList<>();
+        LocalDate cursor = rangeStart.toLocalDate();
+        while (!cursor.isAfter(today)) {
+            Map<Long, Long> perOrder = paidByDayAndOrder.getOrDefault(cursor, Collections.emptyMap());
+            long rev = perOrder.values().stream().mapToLong(Long::longValue).sum();
+            long cnt = perOrder.size();
+            dailyTrend.add(AdminDashboardInsightsDto.DailyPaidTrendPointDto.builder()
+                    .date(cursor)
+                    .paidOrderCount(cnt)
+                    .paidRevenueKrw(rev)
+                    .build());
+            cursor = cursor.plusDays(1);
+        }
+
+        Map<String, Long> categoryAmounts = new HashMap<>();
+        Map<String, Long> brandAmounts = new HashMap<>();
+        Map<Long, long[]> productStat = new HashMap<>();
+        Map<Long, String> productNames = new HashMap<>();
+
+        if (!paidOrderNos.isEmpty()) {
+            List<OrderEntity> ordersForShare = orderRepository.findByOrderNoInWithItemsAndProduct(paidOrderNos);
+            for (OrderEntity order : ordersForShare) {
+                for (OrderItemEntity oi : order.getOrderItems()) {
+                    if (Boolean.TRUE.equals(oi.getIsCancelled())) {
+                        continue;
+                    }
+                    ProductEntity prod = oi.getProduct();
+                    if (prod == null) {
+                        continue;
+                    }
+                    long line = oi.getItemTotalPrice();
+                    int qty = oi.getItemQuantity() != null ? oi.getItemQuantity() : 0;
+                    String catLabel = prod.getProductType() != null
+                            ? prod.getProductType().getLabel()
+                            : "기타";
+                    categoryAmounts.merge(catLabel, line, Long::sum);
+                    String brandLabel = prod.getBrandName();
+                    if (brandLabel == null || brandLabel.isBlank()) {
+                        brandLabel = "브랜드 미지정";
+                    } else {
+                        brandLabel = brandLabel.trim();
+                    }
+                    brandAmounts.merge(brandLabel, line, Long::sum);
+                    Long pn = prod.getProductNo();
+                    productNames.putIfAbsent(pn, prod.getProductName());
+                    productStat.compute(pn, (k, arr) -> {
+                        long[] a = arr != null ? arr : new long[2];
+                        a[0] += line;
+                        a[1] += qty;
+                        return a;
+                    });
+                }
+            }
+        }
+
+        List<AdminDashboardInsightsDto.RevenueShareSliceDto> categoryShare =
+                buildRevenueShareSlices(categoryAmounts, INSIGHTS_SHARE_MAX_SLICES);
+        List<AdminDashboardInsightsDto.RevenueShareSliceDto> brandShare =
+                buildRevenueShareSlices(brandAmounts, INSIGHTS_SHARE_MAX_SLICES);
+
+        List<Map.Entry<Long, long[]>> topEntries = productStat.entrySet().stream()
+                .sorted((a, b) -> Long.compare(b.getValue()[0], a.getValue()[0]))
+                .limit(INSIGHTS_TOP_PRODUCTS)
+                .collect(Collectors.toList());
+        List<AdminDashboardInsightsDto.TopProductInsightDto> topProducts = new ArrayList<>();
+        int rank = 1;
+        for (Map.Entry<Long, long[]> e : topEntries) {
+            long[] v = e.getValue();
+            topProducts.add(AdminDashboardInsightsDto.TopProductInsightDto.builder()
+                    .rank(rank++)
+                    .productNo(e.getKey())
+                    .productName(productNames.getOrDefault(e.getKey(), ""))
+                    .revenueKrw(v[0])
+                    .quantitySold(v[1])
+                    .build());
+        }
+
+        Pageable recentPage = PageRequest.of(0, INSIGHTS_RECENT_ROWS, Sort.by(Sort.Direction.DESC, "orderCreatedAt"));
+        List<OrderEntity> recentOrderEntities = orderRepository.findAll(recentPage).getContent();
+        List<AdminDashboardInsightsDto.RecentOrderBriefDto> recentOrders = recentOrderEntities.stream()
+                .map(o -> AdminDashboardInsightsDto.RecentOrderBriefDto.builder()
+                        .orderNo(o.getOrderNo())
+                        .orderCreatedAt(o.getOrderCreatedAt())
+                        .orderStatus(o.getOrderStatus())
+                        .recipientName(o.getRecipientName())
+                        .orderTotalPriceKrw(o.getOrderTotalPrice())
+                        .build())
+                .collect(Collectors.toList());
+
+        Pageable recentReturnsPage = PageRequest.of(0, INSIGHTS_RECENT_ROWS, Sort.by(Sort.Direction.DESC, "returnRequestedAt"));
+        List<ReturnEntity> recentReturnEntities = returnRepository.findAll(recentReturnsPage).getContent();
+        List<AdminDashboardInsightsDto.RecentReturnBriefDto> recentReturns = new ArrayList<>();
+        for (ReturnEntity r : recentReturnEntities) {
+            Long orderNo = null;
+            if (r.getOrderItem() != null && r.getOrderItem().getOrder() != null) {
+                orderNo = r.getOrderItem().getOrder().getOrderNo();
+            }
+            recentReturns.add(AdminDashboardInsightsDto.RecentReturnBriefDto.builder()
+                    .returnNo(r.getReturnNo())
+                    .orderNo(orderNo)
+                    .returnStatus(r.getReturnStatus())
+                    .returnRequestedAt(r.getReturnRequestedAt())
+                    .returnAmountKrw(r.getReturnAmount())
+                    .build());
+        }
+
+        LocalDate monthStart = today.withDayOfMonth(1);
+        LocalDate monthEnd = today.withDayOfMonth(today.lengthOfMonth());
+        long pendingCount = settlementRepository.countBySettlementStatus(SettlementStatus.PENDING);
+        long pendingAmount = settlementRepository.sumSettlementAmountByStatus(SettlementStatus.PENDING);
+        long pendingCreatedMonthCount = settlementRepository.countBySettlementStatusAndSettlementCreatedAtBetween(
+                SettlementStatus.PENDING, monthStart, monthEnd);
+        long pendingCreatedMonthAmount = settlementRepository.sumSettlementAmountByStatusAndCreatedBetween(
+                SettlementStatus.PENDING, monthStart, monthEnd);
+        long pendingPeriodEndMonthCount = settlementRepository.countPendingWithPeriodEndBetween(
+                SettlementStatus.PENDING, monthStart, monthEnd);
+        long pendingPeriodEndMonthAmount = settlementRepository.sumPendingAmountWithPeriodEndBetween(
+                SettlementStatus.PENDING, monthStart, monthEnd);
+
+        AdminDashboardInsightsDto.SettlementBriefForDashboardDto settlementBrief =
+                AdminDashboardInsightsDto.SettlementBriefForDashboardDto.builder()
+                        .pendingSettlementCount(pendingCount)
+                        .pendingSettlementAmountKrw(pendingAmount)
+                        .pendingCreatedThisMonthCount(pendingCreatedMonthCount)
+                        .pendingCreatedThisMonthAmountKrw(pendingCreatedMonthAmount)
+                        .pendingPeriodEndsThisMonthCount(pendingPeriodEndMonthCount)
+                        .pendingPeriodEndsThisMonthAmountKrw(pendingPeriodEndMonthAmount)
+                        .build();
+
+        return AdminDashboardInsightsDto.builder()
+                .trendDays(days)
+                .dailyPaidTrend(dailyTrend)
+                .categoryRevenueShare(categoryShare)
+                .brandRevenueShare(brandShare)
+                .topProductsByRevenue(topProducts)
+                .recentOrders(recentOrders)
+                .recentReturns(recentReturns)
+                .settlementBrief(settlementBrief)
+                .build();
+    }
+
+    private static List<AdminDashboardInsightsDto.RevenueShareSliceDto> buildRevenueShareSlices(
+            Map<String, Long> amounts,
+            int maxVisible
+    ) {
+        long total = amounts.values().stream().mapToLong(Long::longValue).sum();
+        if (total <= 0) {
+            return List.of();
+        }
+        List<Map.Entry<String, Long>> sorted = amounts.entrySet().stream()
+                .sorted((a, b) -> Long.compare(b.getValue(), a.getValue()))
+                .collect(Collectors.toList());
+        List<AdminDashboardInsightsDto.RevenueShareSliceDto> out = new ArrayList<>();
+        long shownAmount = 0;
+        int limit = Math.min(maxVisible, sorted.size());
+        for (int i = 0; i < limit; i++) {
+            Map.Entry<String, Long> e = sorted.get(i);
+            long v = e.getValue();
+            shownAmount += v;
+            out.add(AdminDashboardInsightsDto.RevenueShareSliceDto.builder()
+                    .label(e.getKey())
+                    .amountKrw(v)
+                    .ratio(Math.round(v * 10000.0 / total) / 10000.0)
+                    .build());
+        }
+        if (sorted.size() > maxVisible) {
+            long other = total - shownAmount;
+            if (other > 0) {
+                out.add(AdminDashboardInsightsDto.RevenueShareSliceDto.builder()
+                        .label("기타")
+                        .amountKrw(other)
+                        .ratio(Math.round(other * 10000.0 / total) / 10000.0)
+                        .build());
+            }
+        }
+        return out;
     }
 
     /**

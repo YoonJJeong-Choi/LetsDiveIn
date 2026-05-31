@@ -1,20 +1,18 @@
 import Footer1 from "@/components/footers/Footer1";
 import Header1 from "@/components/headers/Header1";
-import Topbar6 from "@/components/headers/Topbar6";
 import AccountSidebar from "@/components/my-account/AccountSidebar";
 import Information from "@/components/my-account/Information";
 import Link from "next/link";
 import React from "react";
 
 export const metadata = {
-  title: "My Account || Modave - Multipurpose React Nextjs eCommerce Template",
-  description: "Modave - Multipurpose React Nextjs eCommerce Template",
+  title: "마이페이지 || Let’s Dive In",
+  description: "내 정보 관리",
 };
 
 export default function MyAccountPage() {
   return (
     <>
-      <Topbar6 bgColor="bg-main" />
       <Header1 />
       <>
         {/* page-title */}
@@ -25,11 +23,11 @@ export default function MyAccountPage() {
           <div className="container-full">
             <div className="row">
               <div className="col-12">
-                <h3 className="heading text-center">My Account</h3>
+                <h3 className="heading text-center">마이페이지</h3>
                 <ul className="breadcrumbs d-flex align-items-center justify-content-center">
                   <li>
                     <Link className="link" href={`/`}>
-                      Homepage
+                      홈
                     </Link>
                   </li>
                   <li>
@@ -37,13 +35,13 @@ export default function MyAccountPage() {
                   </li>
                   <li>
                     <a className="link" href="#">
-                      Pages
+                      마이페이지
                     </a>
                   </li>
                   <li>
                     <i className="icon-arrRight" />
                   </li>
-                  <li>My Account</li>
+                  <li>내 정보</li>
                 </ul>
               </div>
             </div>

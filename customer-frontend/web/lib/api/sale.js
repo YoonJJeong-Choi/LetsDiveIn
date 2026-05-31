@@ -1,15 +1,4 @@
-import axios from "axios";
-
-const baseURL =
-  typeof window !== "undefined"
-    ? process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
-    : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-
-const api = axios.create({
-  baseURL,
-  withCredentials: true,
-  headers: { "Content-Type": "application/json" },
-});
+import { api } from "./http";
 
 /**
  * 주문 생성 직전(시뮬레이션) 세일 적용 조회

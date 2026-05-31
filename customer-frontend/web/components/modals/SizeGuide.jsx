@@ -129,7 +129,7 @@ export default function SizeGuide() {
                     ))}
                   </div>
                   <div>
-                    <h6 className="suggests-title">Modave suggests for you:</h6>
+                    <h6 className="suggests-title">추천 조합</h6>
                     <div className="suggests-list">
                       <a href="#" className="suggests-item link text-button">
                         L - shirt

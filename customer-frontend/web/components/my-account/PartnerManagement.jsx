@@ -1,7 +1,10 @@
 "use client";
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { requestDeactivation, requestReactivation, getMyHistory, getMyPartnerInfo } from "@/lib/api/partner";
-import { getMe } from "@/lib/api/auth";
+import { getMe, isPortalAccessError } from "@/lib/api/auth";
+import { getPartnerAdminLoginUrl } from "@/lib/adminUrls";
+import InlineTemplateLoader from "@/components/common/InlineTemplateLoader";
 
 export default function PartnerManagement() {
   const [loading, setLoading] = useState(false);
@@ -10,6 +13,7 @@ export default function PartnerManagement() {
   const [history, setHistory] = useState([]);
   const [activeTab, setActiveTab] = useState("request"); // 'request' or 'history'
   const [isPartner, setIsPartner] = useState(false);
+  const [accessState, setAccessState] = useState("loading"); // loading | guest | customer | portal | partner
   
   // 휴업 신청 폼
   const [deactivationForm, setDeactivationForm] = useState({
@@ -27,11 +31,18 @@ export default function PartnerManagement() {
       try {
         setInitialLoading(true);
         // 파트너 정보 조회 (getMe로 role 확인)
-        const userData = await getMe();
+        const userData = await getMe({ throwOnForbidden: true });
         const user = userData?.data || userData;
+
+        if (!user) {
+          setIsPartner(false);
+          setAccessState("guest");
+          return;
+        }
         
         if (user?.role === "PARTNER") {
           setIsPartner(true);
+          setAccessState("partner");
           console.log("파트너로 확인됨. user:", user);
           // 파트너 상세 정보 조회
           try {
@@ -75,10 +86,12 @@ export default function PartnerManagement() {
           }
         } else {
           setIsPartner(false);
+          setAccessState("customer");
         }
       } catch (error) {
         console.error("파트너 정보 조회 실패:", error);
         setIsPartner(false);
+        setAccessState(isPortalAccessError(error) ? "portal" : "guest");
       } finally {
         setInitialLoading(false);
       }
@@ -181,23 +194,73 @@ export default function PartnerManagement() {
   if (initialLoading) {
     return (
       <div className="my-account-content">
+        <div className="account-details d-flex justify-content-center" style={{ padding: "40px" }}>
+          <InlineTemplateLoader />
+        </div>
+      </div>
+    );
+  }
+
+  if (accessState === "portal") {
+    return (
+      <div className="my-account-content">
         <div className="account-details">
-          <div className="text-center" style={{ padding: "40px" }}>
-            <p>로딩 중...</p>
+          <div className="alert alert-warning">
+            <strong>현재 고객몰에서 사용할 수 없는 계정입니다.</strong>
+            <p className="mb-3">
+              파트너 관리 기능은 관리자 페이지에서만 이용할 수 있습니다.
+              관리자 또는 파트너 계정으로 관리자 로그인 페이지를 이용해주세요.
+            </p>
+            <Link href={getPartnerAdminLoginUrl()} className="tf-btn btn-fill">
+              <span className="text text-button">관리자 로그인으로 이동</span>
+            </Link>
           </div>
         </div>
       </div>
     );
   }
 
-  // 파트너가 아닌 경우 접근 제한
-  if (!isPartner) {
+  if (accessState === "guest") {
+    return (
+      <div className="my-account-content">
+        <div className="account-details">
+          <div className="alert alert-info">
+            <strong>로그인이 필요합니다.</strong>
+            <p className="mb-3">
+              파트너 관련 신청 상태와 관리 기능은 로그인 후 확인할 수 있습니다.
+            </p>
+            <div className="d-flex flex-wrap gap-2">
+              <Link href="/login" className="tf-btn btn-fill">
+                <span className="text text-button">고객 로그인</span>
+              </Link>
+              <Link href={getPartnerAdminLoginUrl()} className="tf-btn btn-outline">
+                <span className="text text-button">관리자 로그인</span>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (accessState === "customer" || !isPartner) {
     return (
       <div className="my-account-content">
         <div className="account-details">
           <div className="alert alert-warning">
-            <strong>접근 권한이 없습니다.</strong>
-            <p>파트너만 이 페이지에 접근할 수 있습니다.</p>
+            <strong>파트너 전용 관리 기능입니다.</strong>
+            <p className="mb-3">
+              휴업 신청과 재활성화 신청은 고객몰이 아니라 관리자 페이지에서
+              파트너 계정으로 진행해 주세요.
+            </p>
+            <div className="d-flex flex-wrap gap-2">
+              <Link href="/partner-application" className="tf-btn btn-outline">
+                <span className="text text-button">입점 신청하기</span>
+              </Link>
+              <Link href={getPartnerAdminLoginUrl()} className="tf-btn btn-fill">
+                <span className="text text-button">관리자 로그인으로 이동</span>
+              </Link>
+            </div>
           </div>
         </div>
       </div>

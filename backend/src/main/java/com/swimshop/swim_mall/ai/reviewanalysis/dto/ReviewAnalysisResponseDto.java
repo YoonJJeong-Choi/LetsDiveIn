@@ -14,12 +14,10 @@ import lombok.NoArgsConstructor;
 public class ReviewAnalysisResponseDto {
 
     private String summary;
-    private SentimentDto sentiment;
     private List<IssueDto> issues;
     private List<ActionDto> actions;
     private List<KeywordDto> topKeywords;
     private List<QuoteDto> representativeQuotes;
     private StatsDto stats;
     private AlertsDto alerts;
-    private String confidence;
 }

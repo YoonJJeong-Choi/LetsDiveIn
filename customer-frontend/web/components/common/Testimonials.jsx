@@ -4,18 +4,17 @@ import React from "react";
 import { Swiper, SwiperSlide } from "swiper/react";
 import Image from "next/image";
 import { Pagination } from "swiper/modules";
-import { testimonialsWithProduct9 } from "@/data/products";
-import { useContextElement } from "@/context/Context";
+import { homeTestimonials } from "@/data/homeTestimonials";
+import { formatKrw } from "@/lib/price/formatKrw";
+
 export default function Testimonials({ parentClass = "flat-spacing" }) {
-  const { setQuickViewItem } = useContextElement();
   return (
     <section className={parentClass}>
       <div className="container">
         <div className="heading-section text-center">
-          <h3 className="heading wow fadeInUp">Customer Say!</h3>
+          <h3 className="heading wow fadeInUp">고객 후기</h3>
           <p className="subheading wow fadeInUp">
-            Our customers adore our products, and we constantly aim to delight
-            them.
+            실제 구매 고객이 남긴 솔직한 후기를 확인해보세요.
           </p>
         </div>
         <div className="swiper tf-sw-testimonial">
@@ -47,8 +46,8 @@ export default function Testimonials({ parentClass = "flat-spacing" }) {
             }}
             dir="ltr"
           >
-            {testimonialsWithProduct9.map((testimonial, index) => (
-              <SwiperSlide key={index}>
+            {homeTestimonials.map((testimonial) => (
+              <SwiperSlide key={testimonial.id}>
                 <div className="testimonial-item hover-img">
                   <div className="img-style">
                     <Image
@@ -57,15 +56,6 @@ export default function Testimonials({ parentClass = "flat-spacing" }) {
                       width={468}
                       height={624}
                     />
-                    <a
-                      href="#quickView"
-                      onClick={() => setQuickViewItem(testimonial)}
-                      data-bs-toggle="modal"
-                      className="box-icon hover-tooltip center"
-                    >
-                      <span className="icon icon-eye" />
-                      <span className="tooltip">Quick View</span>
-                    </a>
                   </div>
                   <div className="content">
                     <div className="content-top">
@@ -117,20 +107,12 @@ export default function Testimonials({ parentClass = "flat-spacing" }) {
                       </div>
                     </div>
                     <div className="box-avt">
-                      <div className="avatar avt-60 round">
-                        <Image
-                          alt="avt"
-                          src={testimonial.avatar}
-                          width={90}
-                          height={91}
-                        />
-                      </div>
                       <div className="box-price">
                         <p className="text-title text-line-clamp-1">
                           {testimonial.title}
                         </p>
                         <div className="text-button price">
-                          ${testimonial.price.toFixed(2)}
+                          {formatKrw(testimonial.price)}
                         </div>
                       </div>
                     </div>
@@ -138,8 +120,8 @@ export default function Testimonials({ parentClass = "flat-spacing" }) {
                 </div>
               </SwiperSlide>
             ))}
-            <div className="sw-pagination-testimonial sw-dots type-circle d-flex justify-content-center spd7" />
           </Swiper>
+          <div className="sw-pagination-testimonial sw-dots type-circle d-flex justify-content-center spd7" />
         </div>
       </div>
     </section>

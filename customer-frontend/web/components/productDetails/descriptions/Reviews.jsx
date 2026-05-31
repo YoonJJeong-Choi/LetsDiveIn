@@ -1,9 +1,9 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import Image from "next/image";
 import ReviewSorting from "./ReviewSorting";
 import { getReviewsByProduct } from "@/lib/api/review";
 import Pagination from "@/components/common/Pagination";
+import InlineTemplateLoader from "@/components/common/InlineTemplateLoader";
 
 export default function Reviews({ productNo }) {
   const [reviews, setReviews] = useState([]);
@@ -133,8 +133,8 @@ export default function Reviews({ productNo }) {
 
   if (loading) {
     return (
-      <div className="text-center p-4">
-        <p>리뷰를 불러오는 중...</p>
+      <div className="p-4 d-flex justify-content-center">
+        <InlineTemplateLoader />
       </div>
     );
   }
@@ -193,14 +193,6 @@ export default function Reviews({ productNo }) {
             pagedReviews.map((review) => (
               <div key={review.reviewNo} className="reply-comment-item">
             <div className="user">
-              <div className="image">
-                <Image
-                      alt={review.customerName || "고객"}
-                  src="/images/avatar/user-default.jpg"
-                  width={120}
-                  height={120}
-                />
-              </div>
               <div>
                 <h6>
                       <span className="link">{review.customerName || "고객"}</span>
@@ -234,14 +226,6 @@ export default function Reviews({ productNo }) {
                 {review.reviewReply && (
                   <div className="reply-comment-item type-reply mt-3">
             <div className="user">
-              <div className="image">
-                <Image
-                          alt="파트너"
-                  src="/images/avatar/user-modave.jpg"
-                  width={104}
-                  height={104}
-                />
-              </div>
               <div>
                 <h6>
                           <span className="link">판매자 답변</span>

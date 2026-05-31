@@ -4,7 +4,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import com.swimshop.swim_mall.common.enums.ReturnReasonType;
-import com.swimshop.swim_mall.common.enums.ReturnRiskTier;
 import com.swimshop.swim_mall.common.enums.ReturnStatus;
 
 import lombok.AllArgsConstructor;
@@ -36,8 +35,6 @@ public class ReturnResponseDto {
     private ReturnStatus returnStatus; // 반품 상태
     private LocalDateTime returnRequestedAt; // 반품 신청일시
     private ReturnReasonType returnReasonType;
-    private Integer returnRiskScore;
-    private ReturnRiskTier returnRiskTier;
     private String returnReason; // 반품 사유
     private Long returnAmount; // 반품 금액
     private String returnTrackingNumber; // 반품 송장번호

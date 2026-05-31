@@ -8,15 +8,17 @@ public class FaqResponseDto {
     private Long faqNo;
     private String faqQuestion;
     private String faqAnswer;
-    private String faqCategory;
-    private String adminName; // 작성한 관리자 이름
-    
-    public FaqResponseDto(Long faqNo, String faqQuestion, String faqAnswer, 
-                         String faqCategory, String adminName) {
+    private String faqCategory; // InquiryCategory 코드 (ORDER_PAYMENT 등)
+    private String faqCategoryLabel; // 화면용 한글 라벨
+    private String adminName;
+
+    public FaqResponseDto(Long faqNo, String faqQuestion, String faqAnswer,
+                         String faqCategory, String faqCategoryLabel, String adminName) {
         this.faqNo = faqNo;
         this.faqQuestion = faqQuestion;
         this.faqAnswer = faqAnswer;
         this.faqCategory = faqCategory;
+        this.faqCategoryLabel = faqCategoryLabel;
         this.adminName = adminName;
     }
 }

@@ -1,13 +1,16 @@
 import Footer1 from "@/components/footers/Footer1";
 import Header1 from "@/components/headers/Header1";
-import Topbar6 from "@/components/headers/Topbar6";
 import SearchProducts from "@/components/products/SearchProducts";
 import React from "react";
+
+export const metadata = {
+  title: "검색 결과 || Let’s Dive In",
+  description: "상품 검색",
+};
 
 export default function SearchResultPage() {
   return (
     <>
-      <Topbar6 bgColor="bg-main" />
       <Header1 />
       <div
         className="page-title"
@@ -16,7 +19,7 @@ export default function SearchResultPage() {
         <div className="container-full">
           <div className="row">
             <div className="col-12">
-              <h3 className="heading text-center">Search</h3>
+              <h3 className="heading text-center">상품 검색</h3>
             </div>
           </div>
         </div>

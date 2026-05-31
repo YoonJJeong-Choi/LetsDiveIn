@@ -12,7 +12,6 @@ import com.swimshop.swim_mall.file.service.FileStorageService;
 import com.swimshop.swim_mall.file.service.SignedFileUrlService;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -71,10 +70,7 @@ public class FileController {
             validateDownloadPermission(currentUser, file);
         }
 
-        Resource resource = new FileSystemResource(file.getStoragePath());
-        if (!resource.exists()) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST, "파일이 존재하지 않습니다.");
-        }
+        Resource resource = fileStorageService.download(file);
 
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(file.getContentType()))

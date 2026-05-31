@@ -1,7 +1,9 @@
 package com.swimshop.swim_mall.customer.controller;
 
+import java.net.URI;
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Value;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -38,6 +40,9 @@ public class CustomerController {
     private final CustomerService customerService;
     private final AuthService authService; // AuthService 주입
 
+    @Value("${app.customer-frontend-url:http://localhost:3000}")
+    private String customerFrontendUrl;
+
     //회원가입
     @PostMapping("/join")
     public ResponseEntity<String> join(@RequestBody CustomerRequestDto requestDto){
@@ -45,11 +50,29 @@ public class CustomerController {
         return ResponseEntity.ok("입력하신 이메일로 인증 요청하였습니다.");
     }
 
-    //이메일 인증 확인 (이메일 링크 클릭 시)
+    //이메일 인증 확인 (이메일 링크 클릭 시 → 고객 프론트 안내 페이지로 리다이렉트)
     @GetMapping("/check")
-    public ResponseEntity<String> checkEmail(@RequestParam String token) {
-        customerService.checkEmail(token);
-        return ResponseEntity.ok("이메일 인증이 완료되었습니다.");
+    public ResponseEntity<Void> checkEmail(@RequestParam String token) {
+        String base = customerFrontendUrl.replaceAll("/$", "");
+        try {
+            customerService.checkEmail(token);
+            return ResponseEntity.status(HttpStatus.FOUND)
+                    .location(URI.create(base + "/email-verified?status=success"))
+                    .build();
+        } catch (IllegalArgumentException ex) {
+            String code = "invalid";
+            String msg = ex.getMessage();
+            if (msg != null) {
+                if (msg.contains("만료")) {
+                    code = "expired";
+                } else if (msg.contains("이미 인증")) {
+                    code = "already";
+                }
+            }
+            return ResponseEntity.status(HttpStatus.FOUND)
+                    .location(URI.create(base + "/email-verified?status=" + code))
+                    .build();
+        }
     }
 
     //로그인 상태 확인 (현재 로그인한 사용자 — 고객 상세 정보)

@@ -2,6 +2,7 @@ package com.swimshop.swim_mall.order.repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -11,12 +12,41 @@ import org.springframework.stereotype.Repository;
 import com.swimshop.swim_mall.order.entity.OrderEntity;
 import com.swimshop.swim_mall.order.entity.OrderItemEntity;
 import com.swimshop.swim_mall.common.enums.DeliveryStatus;
+import com.swimshop.swim_mall.common.enums.OrderStatus;
+
+import java.util.Collection;
 
 @Repository
 public interface OrderItemRepository extends JpaRepository<OrderItemEntity, Long> {
-    
+
+    @Query("SELECT oi FROM OrderItemEntity oi " +
+           "LEFT JOIN FETCH oi.order o " +
+           "LEFT JOIN FETCH oi.product p LEFT JOIN FETCH p.partner " +
+           "LEFT JOIN FETCH oi.option opt LEFT JOIN FETCH opt.partner " +
+           "WHERE oi.orderItemNo = :orderItemNo")
+    Optional<OrderItemEntity> findByIdWithPartners(@Param("orderItemNo") Long orderItemNo);
+
+    /**
+     * 발주 확인 대기: 취소 아님, confirmedAt 없음, 주문이 결제 완료 또는 진행 중
+     */
+    @Query("SELECT COUNT(oi) FROM OrderItemEntity oi WHERE oi.isCancelled = false AND oi.confirmedAt IS NULL AND oi.order.orderStatus IN :statuses")
+    long countPendingConfirmation(@Param("statuses") List<OrderStatus> statuses);
+
     // 주문별 아이템 목록 조회
     List<OrderItemEntity> findByOrder(OrderEntity order);
+
+    /**
+     * 상품별 판매 수량 집계 (인기순 정렬용)
+     * - 취소되지 않은 주문상품만 집계
+     * - 결제 완료/진행중 주문만 반영
+     * 결과: [productNo, soldQuantity]
+     */
+    @Query("SELECT oi.product.productNo, COALESCE(SUM(oi.itemQuantity), 0) " +
+           "FROM OrderItemEntity oi " +
+           "WHERE oi.isCancelled = false " +
+           "AND oi.order.orderStatus IN :statuses " +
+           "GROUP BY oi.product.productNo")
+    List<Object[]> findSoldQuantityByProduct(@Param("statuses") List<OrderStatus> statuses);
     
     /**
      * 차트/Top N 집계를 위해 옵션/상품/파트너를 함께 로드
@@ -282,5 +312,116 @@ public interface OrderItemRepository extends JpaRepository<OrderItemEntity, Long
         @Param("startDate") LocalDateTime startDate,
         @Param("endDate") LocalDateTime endDate
     );
+
+    /**
+     * 파트너 라인이 포함된 주문 중, 기간 내 결제 완료(paidAt) 건수(주문 번호 기준 중복 제거)
+     */
+    @Query("SELECT COUNT(DISTINCT o.orderNo) FROM OrderItemEntity oi "
+            + "JOIN oi.order o JOIN o.payment p "
+            + "WHERE oi.isCancelled = false "
+            + "AND p.paymentCancelYn = false AND p.paidAt IS NOT NULL "
+            + "AND p.paidAt >= :start AND p.paidAt < :end "
+            + "AND o.orderStatus IN :orderStatuses "
+            + "AND ((oi.option IS NOT NULL AND oi.option.partner.partnerId = :partnerId) "
+            + "OR (oi.option IS NULL AND oi.product.partner.partnerId = :partnerId))")
+    long countDistinctPartnerOrdersPaidBetween(
+            @Param("partnerId") Long partnerId,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end,
+            @Param("orderStatuses") Collection<OrderStatus> orderStatuses);
+
+    /**
+     * 위와 동일 조건의 본인 주문상품 라인 매출 합계(원)
+     */
+    @Query("SELECT COALESCE(SUM(oi.itemTotalPrice), 0) FROM OrderItemEntity oi "
+            + "JOIN oi.order o JOIN o.payment p "
+            + "WHERE oi.isCancelled = false "
+            + "AND p.paymentCancelYn = false AND p.paidAt IS NOT NULL "
+            + "AND p.paidAt >= :start AND p.paidAt < :end "
+            + "AND o.orderStatus IN :orderStatuses "
+            + "AND ((oi.option IS NOT NULL AND oi.option.partner.partnerId = :partnerId) "
+            + "OR (oi.option IS NULL AND oi.product.partner.partnerId = :partnerId))")
+    long sumPartnerLineRevenuePaidBetween(
+            @Param("partnerId") Long partnerId,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end,
+            @Param("orderStatuses") Collection<OrderStatus> orderStatuses);
+
+    /**
+     * 발송 전 주문: 본인 라인이 발주 미확인이거나, 배송이 배송준비(READY)인 주문(주문 번호 기준 중복 제거)
+     */
+    @Query("SELECT COUNT(DISTINCT o.orderNo) FROM OrderItemEntity oi JOIN oi.order o "
+            + "WHERE oi.isCancelled = false "
+            + "AND o.orderStatus IN :orderStatuses "
+            + "AND ((oi.option IS NOT NULL AND oi.option.partner.partnerId = :partnerId) "
+            + "OR (oi.option IS NULL AND oi.product.partner.partnerId = :partnerId)) "
+            + "AND (oi.confirmedAt IS NULL OR (oi.delivery IS NOT NULL AND oi.delivery.deliveryStatus = :ready))")
+    long countDistinctPartnerOrdersPreShipment(
+            @Param("partnerId") Long partnerId,
+            @Param("orderStatuses") Collection<OrderStatus> orderStatuses,
+            @Param("ready") DeliveryStatus ready);
+
+    /**
+     * 본인 라인이 배송중(SHIPPED)인 주문(주문 번호 기준 중복 제거)
+     */
+    @Query("SELECT COUNT(DISTINCT o.orderNo) FROM OrderItemEntity oi JOIN oi.order o "
+            + "WHERE oi.isCancelled = false "
+            + "AND o.orderStatus IN :orderStatuses "
+            + "AND ((oi.option IS NOT NULL AND oi.option.partner.partnerId = :partnerId) "
+            + "OR (oi.option IS NULL AND oi.product.partner.partnerId = :partnerId)) "
+            + "AND oi.delivery IS NOT NULL AND oi.delivery.deliveryStatus = :shipped")
+    long countDistinctPartnerOrdersInDelivery(
+            @Param("partnerId") Long partnerId,
+            @Param("orderStatuses") Collection<OrderStatus> orderStatuses,
+            @Param("shipped") DeliveryStatus shipped);
+
+    @Query("SELECT COUNT(DISTINCT o.orderNo) FROM OrderItemEntity oi "
+            + "JOIN oi.order o JOIN o.payment p "
+            + "WHERE oi.isCancelled = false "
+            + "AND p.paymentCancelYn = false AND p.paidAt IS NOT NULL "
+            + "AND p.paidAt >= :start AND p.paidAt < :end "
+            + "AND o.orderStatus IN :orderStatuses "
+            + "AND oi.product.productNo = :productNo "
+            + "AND ((oi.option IS NOT NULL AND oi.option.partner.partnerId = :partnerId) "
+            + "OR (oi.option IS NULL AND oi.product.partner.partnerId = :partnerId))")
+    long countDistinctPartnerOrdersPaidBetweenForProduct(
+            @Param("partnerId") Long partnerId,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end,
+            @Param("orderStatuses") Collection<OrderStatus> orderStatuses,
+            @Param("productNo") Long productNo);
+
+    @Query("SELECT COALESCE(SUM(oi.itemTotalPrice), 0) FROM OrderItemEntity oi "
+            + "JOIN oi.order o JOIN o.payment p "
+            + "WHERE oi.isCancelled = false "
+            + "AND p.paymentCancelYn = false AND p.paidAt IS NOT NULL "
+            + "AND p.paidAt >= :start AND p.paidAt < :end "
+            + "AND o.orderStatus IN :orderStatuses "
+            + "AND oi.product.productNo = :productNo "
+            + "AND ((oi.option IS NOT NULL AND oi.option.partner.partnerId = :partnerId) "
+            + "OR (oi.option IS NULL AND oi.product.partner.partnerId = :partnerId))")
+    long sumPartnerLineRevenuePaidBetweenForProduct(
+            @Param("partnerId") Long partnerId,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end,
+            @Param("orderStatuses") Collection<OrderStatus> orderStatuses,
+            @Param("productNo") Long productNo);
+
+    @Query("SELECT oi.product.productNo, oi.product.productName, oi.product.sku, "
+            + "COALESCE(SUM(oi.itemQuantity), 0L), COALESCE(SUM(oi.itemTotalPrice), 0L) FROM OrderItemEntity oi "
+            + "JOIN oi.order o JOIN o.payment p "
+            + "WHERE oi.isCancelled = false "
+            + "AND p.paymentCancelYn = false AND p.paidAt IS NOT NULL "
+            + "AND p.paidAt >= :start AND p.paidAt < :end "
+            + "AND o.orderStatus IN :orderStatuses "
+            + "AND ((oi.option IS NOT NULL AND oi.option.partner.partnerId = :partnerId) "
+            + "OR (oi.option IS NULL AND oi.product.partner.partnerId = :partnerId)) "
+            + "GROUP BY oi.product.productNo, oi.product.productName, oi.product.sku "
+            + "ORDER BY SUM(oi.itemTotalPrice) DESC")
+    List<Object[]> aggregatePartnerLineSalesByProductBetween(
+            @Param("partnerId") Long partnerId,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end,
+            @Param("orderStatuses") Collection<OrderStatus> orderStatuses);
 
 }

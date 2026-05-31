@@ -30,17 +30,27 @@ public interface EventRepository extends JpaRepository<EventEntity, Long> {
 
     @Query("SELECT e FROM EventEntity e " +
            "WHERE e.eventStatus IN :statuses " +
+           "AND e.customerExposeAt IS NOT NULL " +
+           "AND e.customerExposeAt <= :now " +
+           "AND (e.eventStatus <> com.swimshop.swim_mall.common.enums.EventStatus.PUBLISHED " +
+           "     OR e.customerEventEndAt >= :now) " +
            "ORDER BY e.customerEventStartAt DESC, e.eventNo DESC")
     List<EventEntity> findPublicVisibleEvents(
-            @Param("statuses") List<EventStatus> statuses
+            @Param("statuses") List<EventStatus> statuses,
+            @Param("now") LocalDateTime now
     );
 
     @Query("SELECT e FROM EventEntity e " +
            "WHERE e.eventNo = :eventNo " +
-           "AND e.eventStatus IN :statuses")
+           "AND e.eventStatus IN :statuses " +
+           "AND e.customerExposeAt IS NOT NULL " +
+           "AND e.customerExposeAt <= :now " +
+           "AND (e.eventStatus <> com.swimshop.swim_mall.common.enums.EventStatus.PUBLISHED " +
+           "     OR e.customerEventEndAt >= :now)")
     java.util.Optional<EventEntity> findPublicVisibleEventDetail(
             @Param("eventNo") Long eventNo,
-            @Param("statuses") List<EventStatus> statuses
+            @Param("statuses") List<EventStatus> statuses,
+            @Param("now") LocalDateTime now
     );
 
     List<EventEntity> findByEventStatusAndCustomerEventEndAtBefore(EventStatus eventStatus, LocalDateTime endAt);

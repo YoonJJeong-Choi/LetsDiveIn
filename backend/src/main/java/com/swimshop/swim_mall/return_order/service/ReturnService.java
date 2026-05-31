@@ -1,6 +1,7 @@
 package com.swimshop.swim_mall.return_order.service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Collections;
 import java.util.Objects;
@@ -17,7 +18,6 @@ import com.swimshop.swim_mall.common.enums.AccountRole;
 import com.swimshop.swim_mall.common.enums.DeliveryStatus;
 import com.swimshop.swim_mall.common.enums.OrderStatus;
 import com.swimshop.swim_mall.common.enums.ReturnReasonType;
-import com.swimshop.swim_mall.common.enums.ReturnRiskTier;
 import com.swimshop.swim_mall.common.enums.ReturnStatus;
 import com.swimshop.swim_mall.common.error.BusinessException;
 import com.swimshop.swim_mall.common.error.ErrorCode;
@@ -25,7 +25,7 @@ import com.swimshop.swim_mall.return_order.dto.ReturnRequestDto;
 import com.swimshop.swim_mall.return_order.dto.ReturnResponseDto;
 import com.swimshop.swim_mall.return_order.dto.ReturnUpdateRequestDto;
 import com.swimshop.swim_mall.return_order.dto.ReturnHistoryDto;
-import com.swimshop.swim_mall.return_order.dto.ReturnAiAssistResponseDto;
+import com.swimshop.swim_mall.return_order.dto.ReturnAssistResponseDto;
 import com.swimshop.swim_mall.return_order.entity.ReturnEntity;
 import com.swimshop.swim_mall.return_order.entity.ReturnHistoryEntity;
 import com.swimshop.swim_mall.return_order.entity.ReturnImageEntity;
@@ -48,9 +48,7 @@ import com.swimshop.swim_mall.customer.reopository.CustomerActivityLogRepository
 import com.swimshop.swim_mall.common.enums.CustomerActivityType;
 import com.swimshop.swim_mall.file.entity.UploadedFileEntity;
 import com.swimshop.swim_mall.file.repository.UploadedFileRepository;
-import com.swimshop.swim_mall.file.service.SignedFileUrlService;
-import com.swimshop.swim_mall.return_order.client.OpenAiReturnAssistVisionClient;
-
+import com.swimshop.swim_mall.product.service.ProductCustomerImageUrlResolver;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import java.util.HashMap;
@@ -75,17 +73,12 @@ public class ReturnService {
     private final CustomerActivityLogRepository customerActivityLogRepository;
     private final UploadedFileRepository uploadedFileRepository;
     private final ReturnImageRepository returnImageRepository;
-    private final ReturnFraudService returnFraudService;
     private final ReturnImageAnalysisService returnImageAnalysisService;
-    private final ChecklistGenerator checklistGenerator;
-    private final OpenAiReturnAssistVisionClient openAiReturnAssistVisionClient;
-    private final SignedFileUrlService signedFileUrlService;
+    private final ReturnCustomerHistoryInsightService returnCustomerHistoryInsightService;
+    private final ProductCustomerImageUrlResolver productCustomerImageUrlResolver;
 
-    @Value("${app.public-base-url:${app.base-url:http://localhost:8080}}")
-    private String appPublicBaseUrl;
-
-    @Value("${AI_FEATURE_ENABLED:true}")
-    private boolean aiFeatureEnabled;
+    @Value("${return.assist.enabled:true}")
+    private boolean returnAssistEnabled;
 
     /**
      * 반품 신청 (고객용)
@@ -126,9 +119,6 @@ public class ReturnService {
                 : List.of();
         validateReturnImagesForType(requestDto.getReturnReasonType(), imageFileIds);
 
-        int riskScore = computeReturnRiskScore(customerId, orderItem.getItemTotalPrice(), requestDto.getReturnReasonType());
-        ReturnRiskTier riskTier = toRiskTier(riskScore);
-
         String reasonToStore = normalizeReturnReason(requestDto.getReturnReason());
 
         // 반품 엔티티 생성
@@ -137,8 +127,6 @@ public class ReturnService {
                 .returnStatus(ReturnStatus.REQUESTED)
                 .returnRequestedAt(LocalDateTime.now())
                 .returnReasonType(requestDto.getReturnReasonType())
-                .returnRiskScore(riskScore)
-                .returnRiskTier(riskTier)
                 .returnReason(reasonToStore)
                 .returnAmount(orderItem.getItemTotalPrice()) // 주문 아이템 총 가격을 반품 금액으로 설정
                 .build();
@@ -171,8 +159,6 @@ public class ReturnService {
             newValueMap.put("status", ReturnStatus.REQUESTED.name());
             newValueMap.put("returnReasonType", requestDto.getReturnReasonType().name());
             newValueMap.put("returnReason", reasonToStore);
-            newValueMap.put("returnRiskScore", riskScore);
-            newValueMap.put("returnRiskTier", riskTier.name());
             newValueMap.put("returnAmount", orderItem.getItemTotalPrice());
             newValueMap.put("imageFileIds", imageFileIds);
             
@@ -353,124 +339,54 @@ public class ReturnService {
     }
 
     /**
-     * 관리자 반품 AI 보조 결과 조회 (MVP: 규칙 기반 보조만 제공)
+     * 관리자 반품 검토 보조 (규칙 기반: 증빙·정책 체크리스트·고객 이력 참고)
      */
     @Transactional
-    public ReturnAiAssistResponseDto getAdminAiAssist(HttpSession session, Long returnNo) {
+    public ReturnAssistResponseDto getAdminReturnAssist(HttpSession session, Long returnNo) {
         AuthLoginResponseDto currentUser = authService.getCurrentUser(session);
         if (currentUser.getRole() != AccountRole.ADMIN) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "관리자만 AI 보조 기능을 사용할 수 있습니다.");
+            throw new BusinessException(ErrorCode.FORBIDDEN, "관리자만 반품 검토 보조를 사용할 수 있습니다.");
         }
 
         ReturnEntity targetReturn = returnRepository.findById(returnNo)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RETURN_NOT_FOUND));
 
-        if (!aiFeatureEnabled) {
-            ReturnAiAssistResponseDto disabled = ReturnAiAssistResponseDto.builder()
-                    .featureEnabled(false)
-                    .fraudScore(0)
-                    .riskLevel(ReturnRiskTier.LOW.name())
-                    .riskFactors(List.of("AI_FEATURE_DISABLED"))
-                    .evidenceTags(List.of())
-                    .evidenceGaps(List.of())
-                    .recommendedActions(List.of("AI 기능이 비활성화되어 기존 관리자 검토 절차를 진행하세요."))
-                    .build();
-            recordAiAssistAudit(targetReturn, currentUser, disabled);
+        if (!returnAssistEnabled) {
+            ReturnAssistResponseDto disabled = buildDisabledReturnAssistResponse();
+            recordReturnAssistAudit(targetReturn, currentUser, disabled);
             return disabled;
         }
 
         Long customerId = targetReturn.getOrderItem().getOrder().getCustomer().getCustomerId();
         List<ReturnEntity> customerReturns = returnRepository.findByCustomerId(customerId);
-        ReturnFraudService.FraudResult fraud = returnFraudService.evaluate(targetReturn, customerReturns);
+        ReturnCustomerHistoryInsightService.CustomerHistoryInsight historyInsight =
+                returnCustomerHistoryInsightService.summarize(targetReturn, customerReturns);
 
-        List<String> ruleBasedImageUrls = getReturnImageUrls(targetReturn);
-        ReturnImageAnalysisService.EvidenceResult ruleBasedEvidence = returnImageAnalysisService.analyze(
-                ruleBasedImageUrls,
+        List<String> imageUrls = getReturnImageUrls(targetReturn);
+        ReturnImageAnalysisService.EvidenceResult evidence = returnImageAnalysisService.analyze(
+                imageUrls,
                 targetReturn.getReturnReasonType(),
                 targetReturn.getReturnReason());
-        List<String> ruleBasedActions = checklistGenerator.generate(fraud, ruleBasedEvidence);
 
-        ReturnImageAnalysisService.EvidenceResult evidence = ruleBasedEvidence;
-        List<String> actions = ruleBasedActions;
-        boolean shouldAttemptOpenAi = shouldUseOpenAiVision(
-                fraud,
-                targetReturn.getReturnReasonType(),
-                !ruleBasedImageUrls.isEmpty());
-        if (!shouldAttemptOpenAi) {
-            log.info(
-                    "AI assist OpenAI vision skipped by policy. returnNo={}, riskLevel={}, reasonType={}, imageCount={}",
-                    targetReturn.getReturnNo(),
-                    fraud != null && fraud.riskLevel() != null ? fraud.riskLevel().name() : "UNKNOWN",
-                    targetReturn.getReturnReasonType(),
-                    ruleBasedImageUrls.size());
-        }
+        ReturnAssistResponseDto response = buildReturnAssistResponse(
+                targetReturn,
+                historyInsight,
+                evidence);
 
-        boolean readyForOpenAi = shouldAttemptOpenAi;
-        List<String> openAiImageUrls = List.of();
-        String fallbackReason = null;
-        if (shouldAttemptOpenAi) {
-            try {
-                openAiImageUrls = getOpenAiImageUrls(targetReturn);
-            } catch (Exception e) {
-                readyForOpenAi = false;
-                fallbackReason = "SIGNED_URL_GENERATION_FAILED";
-                log.warn(
-                        "AI assist OpenAI vision fallback applied. returnNo={}, reasonType={}, imageCount={}, fallbackReason={}, errorType={}",
-                        targetReturn.getReturnNo(),
-                        targetReturn.getReturnReasonType(),
-                        ruleBasedImageUrls.size(),
-                        fallbackReason,
-                        e.getClass().getSimpleName());
-            }
-        }
-
-        if (readyForOpenAi) {
-            try {
-                OpenAiReturnAssistVisionClient.VisionAssistResult openAiResult = openAiReturnAssistVisionClient.requestVisionAssist(
-                        openAiImageUrls,
-                        targetReturn.getReturnReasonType(),
-                        targetReturn.getReturnReason());
-                if (safeList(openAiResult.recommendedActions()).isEmpty()) {
-                    fallbackReason = "OPENAI_EMPTY_RECOMMENDED_ACTIONS";
-                } else {
-                    evidence = new ReturnImageAnalysisService.EvidenceResult(
-                            safeList(openAiResult.evidenceTags()),
-                            safeList(openAiResult.evidenceGaps()));
-                    actions = safeList(openAiResult.recommendedActions());
-                }
-            } catch (Exception e) {
-                fallbackReason = "OPENAI_CALL_OR_PARSE_FAILED";
-                log.warn(
-                        "AI assist OpenAI vision fallback applied. returnNo={}, reasonType={}, imageCount={}, fallbackReason={}, errorType={}",
-                        targetReturn.getReturnNo(),
-                        targetReturn.getReturnReasonType(),
-                        openAiImageUrls.size(),
-                        fallbackReason,
-                        e.getClass().getSimpleName());
-            }
-        }
-
-        if (fallbackReason != null && readyForOpenAi) {
-            log.warn(
-                    "AI assist OpenAI vision fallback applied. returnNo={}, reasonType={}, imageCount={}, fallbackReason={}",
-                    targetReturn.getReturnNo(),
-                    targetReturn.getReturnReasonType(),
-                    openAiImageUrls.size(),
-                    fallbackReason);
-        }
-
-        ReturnAiAssistResponseDto response = ReturnAiAssistResponseDto.builder()
-                .featureEnabled(true)
-                .fraudScore(fraud.fraudScore())
-                .riskLevel(fraud.riskLevel().name())
-                .riskFactors(safeList(fraud.riskFactors()))
-                .evidenceTags(safeList(evidence.evidenceTags()))
-                .evidenceGaps(safeList(evidence.evidenceGaps()))
-                .recommendedActions(safeList(actions))
-                .build();
-
-        recordAiAssistAudit(targetReturn, currentUser, response);
+        recordReturnAssistAudit(targetReturn, currentUser, response);
         return response;
+    }
+
+    /** @deprecated {@link #getAdminReturnAssist(HttpSession, Long)} */
+    @Deprecated
+    public ReturnAssistResponseDto getAdminReviewAssist(HttpSession session, Long returnNo) {
+        return getAdminReturnAssist(session, returnNo);
+    }
+
+    /** @deprecated {@link #getAdminReturnAssist(HttpSession, Long)} */
+    @Deprecated
+    public ReturnAssistResponseDto getAdminAiAssist(HttpSession session, Long returnNo) {
+        return getAdminReturnAssist(session, returnNo);
     }
 
     /**
@@ -917,7 +833,7 @@ public class ReturnService {
         return builder.build();
     }
 
-    private void recordAiAssistAudit(ReturnEntity returnEntity, AuthLoginResponseDto actor, ReturnAiAssistResponseDto response) {
+    private void recordReturnAssistAudit(ReturnEntity returnEntity, AuthLoginResponseDto actor, ReturnAssistResponseDto response) {
         try {
             AdminEntity admin = adminRepository.findById(actor.getSubjectId())
                     .orElseThrow(() -> new BusinessException(ErrorCode.ADMIN_NOT_FOUND));
@@ -925,22 +841,20 @@ public class ReturnService {
             Map<String, Object> payload = new HashMap<>();
             payload.put("actorRole", actor.getRole() != null ? actor.getRole().name() : "UNKNOWN");
             payload.put("actorId", actor.getSubjectId());
-            payload.put("featureEnabled", response.isFeatureEnabled());
-            payload.put("fraudScore", response.getFraudScore());
-            payload.put("riskLevel", response.getRiskLevel());
-            payload.put("riskFactors", safeList(response.getRiskFactors()));
-            payload.put("evidenceTags", safeList(response.getEvidenceTags()));
-            payload.put("evidenceGaps", safeList(response.getEvidenceGaps()));
-            payload.put("recommendedActions", safeList(response.getRecommendedActions()));
+            payload.put("summary", response.getSummary());
+            payload.put("reviewPriority", response.getReviewPriority());
+            payload.put("evidenceStatus", response.getEvidenceStatus());
+            payload.put("checkPoints", safeList(response.getCheckPoints()));
+            payload.put("signals", response.getSignals());
 
             String newValueJson = objectMapper.writeValueAsString(payload);
             ReturnHistoryEntity history = ReturnHistoryEntity.createByAdmin(
                     returnEntity,
                     admin,
-                    "AI_ASSIST",
+                    "RETURN_ASSIST",
                     null,
                     newValueJson,
-                    "관리자 반품 AI 보조 조회");
+                    "관리자 반품 검토 보조 조회");
             returnHistoryRepository.save(history);
         } catch (Exception ignored) {
             // 감사로그 실패가 관리자 조회를 막지 않도록 무시
@@ -952,6 +866,289 @@ public class ReturnService {
             return List.of();
         }
         return values.stream().filter(Objects::nonNull).collect(Collectors.toList());
+    }
+
+    private ReturnAssistResponseDto buildDisabledReturnAssistResponse() {
+        return ReturnAssistResponseDto.builder()
+                .summary("검토 보조 기능이 비활성화되어 있습니다. 주문·배송·반품 이력을 기본 절차대로 확인하세요.")
+                .reviewPriority(ReturnAssistResponseDto.ReviewPriority.builder()
+                        .code("MANUAL")
+                        .label("수동 검토")
+                        .reason("자동 보조 없이 주문, 배송, 반품 이력을 기본 절차대로 확인해야 합니다.")
+                        .build())
+                .evidenceStatus(ReturnAssistResponseDto.EvidenceStatus.builder()
+                        .code("NOT_ANALYZED")
+                        .label("자동 정리 안 함")
+                        .detail("검토 보조가 꺼져 있어 증빙 상태를 자동 정리하지 않았습니다.")
+                        .build())
+                .checkPoints(List.of("주문, 배송, 반품 이력을 기본 절차에 따라 확인하세요."))
+                .signals(ReturnAssistResponseDto.Signals.builder()
+                        .customerSignals(List.of())
+                        .build())
+                .build();
+    }
+
+    private ReturnAssistResponseDto buildReturnAssistResponse(
+            ReturnEntity targetReturn,
+            ReturnCustomerHistoryInsightService.CustomerHistoryInsight historyInsight,
+            ReturnImageAnalysisService.EvidenceResult evidence) {
+        List<String> insightCodes = historyInsight != null ? safeList(historyInsight.insightCodes()) : List.of();
+        List<String> evidenceTags = evidence != null ? safeList(evidence.evidenceTags()) : List.of();
+        List<String> evidenceGaps = evidence != null ? safeList(evidence.evidenceGaps()) : List.of();
+
+        ReturnAssistResponseDto.EvidenceStatus evidenceStatus = buildEvidenceStatus(
+                targetReturn.getReturnReasonType(),
+                evidenceTags,
+                evidenceGaps);
+        ReturnAssistResponseDto.ReviewPriority reviewPriority = buildReviewPriority(
+                targetReturn.getReturnReasonType(),
+                evidenceGaps);
+        ReturnAssistResponseDto.Signals signals = buildSignals(insightCodes);
+
+        return ReturnAssistResponseDto.builder()
+                .summary(buildSummary(targetReturn.getReturnReasonType(), reviewPriority, evidenceStatus))
+                .reviewPriority(reviewPriority)
+                .evidenceStatus(evidenceStatus)
+                .checkPoints(buildCheckPoints(targetReturn.getReturnReasonType(), evidenceGaps))
+                .signals(signals)
+                .build();
+    }
+
+    private ReturnAssistResponseDto.EvidenceStatus buildEvidenceStatus(
+            ReturnReasonType reasonType,
+            List<String> evidenceTags,
+            List<String> evidenceGaps) {
+        if (reasonType == ReturnReasonType.CHANGE_OF_MIND || reasonType == ReturnReasonType.ORDER_MISTAKE) {
+            return ReturnAssistResponseDto.EvidenceStatus.builder()
+                    .code("NOT_REQUIRED")
+                    .label("증빙 필수 아님")
+                    .detail(buildPolicyReviewDetail(reasonType))
+                    .build();
+        }
+        boolean imageRequired = isImageEvidenceImportant(reasonType);
+        boolean missingRequiredImage = containsAny(evidenceGaps, "REQUIRED_IMAGE_MISSING", "NO_IMAGE_EVIDENCE");
+
+        if (imageRequired && missingRequiredImage) {
+            return ReturnAssistResponseDto.EvidenceStatus.builder()
+                    .code("NEEDS_MORE_EVIDENCE")
+                    .label("증빙 보완 필요")
+                    .detail("불량·오배송 계열 사유인데 핵심 이미지가 부족해 추가 자료 요청 후 판단하는 편이 안전합니다.")
+                    .build();
+        }
+        if (!evidenceGaps.isEmpty()) {
+            return ReturnAssistResponseDto.EvidenceStatus.builder()
+                    .code("PARTIAL")
+                    .label("일부 보완 필요")
+                    .detail(buildPartialEvidenceDetail(evidenceGaps))
+                    .build();
+        }
+        if (!evidenceTags.isEmpty()) {
+            return ReturnAssistResponseDto.EvidenceStatus.builder()
+                    .code("SUFFICIENT")
+                    .label("기본 증빙 확보")
+                    .detail("현재 등록된 이미지와 사유 설명으로 1차 검토는 진행할 수 있습니다.")
+                    .build();
+        }
+        return ReturnAssistResponseDto.EvidenceStatus.builder()
+                .code("LIMITED")
+                .label("증빙 정보 제한적")
+                .detail("확인 가능한 이미지나 상세 설명이 충분하지 않아 수동 검토가 필요합니다.")
+                .build();
+    }
+
+    private String buildPartialEvidenceDetail(List<String> evidenceGaps) {
+        if (containsAny(evidenceGaps, "ADDITIONAL_IMAGE_RECOMMENDED")) {
+            return "사진이 1장만 등록되어 있습니다. 내용이 충분하면 그대로 검토하시고, 필요할 때만 추가 촬영을 요청하세요.";
+        }
+        if (containsAny(evidenceGaps, "REASON_TEXT_TOO_SHORT")) {
+            return "고객 상세 사유가 짧아 증빙과 함께 설명 보완을 받는 것이 좋습니다.";
+        }
+        return "현재 자료만으로도 일부 판단은 가능하지만 보완 자료가 있으면 검토 정확도가 높아집니다.";
+    }
+
+    private ReturnAssistResponseDto.ReviewPriority buildReviewPriority(
+            ReturnReasonType reasonType,
+            List<String> evidenceGaps) {
+        if (reasonType == ReturnReasonType.CHANGE_OF_MIND || reasonType == ReturnReasonType.ORDER_MISTAKE) {
+            return ReturnAssistResponseDto.ReviewPriority.builder()
+                    .code("LOW")
+                    .label("정책 확인 중심")
+                    .reason("이미지 판정보다 반품 가능 조건과 상품 상태 확인이 우선인 건입니다.")
+                    .build();
+        }
+        boolean imageRequired = isImageEvidenceImportant(reasonType);
+        boolean criticalEvidenceGap = imageRequired && containsAny(evidenceGaps, "REQUIRED_IMAGE_MISSING", "NO_IMAGE_EVIDENCE");
+        if (criticalEvidenceGap) {
+            return ReturnAssistResponseDto.ReviewPriority.builder()
+                    .code("HIGH")
+                    .label("우선 검토")
+                    .reason("현재 주장 확인에 필요한 핵심 증빙이 비어 있어 먼저 자료 보완이 필요한 건입니다.")
+                    .build();
+        }
+        if (!evidenceGaps.isEmpty() || reasonType == ReturnReasonType.DEFECT || reasonType == ReturnReasonType.WRONG_ITEM) {
+            return ReturnAssistResponseDto.ReviewPriority.builder()
+                    .code("MEDIUM")
+                    .label("추가 확인 권장")
+                    .reason("현재 건의 주장과 증빙, 주문 정보를 함께 대조하며 확인하는 편이 좋습니다.")
+                    .build();
+        }
+        return ReturnAssistResponseDto.ReviewPriority.builder()
+                .code("LOW")
+                .label("일반 검토")
+                .reason("현재 자료 기준으로 기본 절차에 따라 1차 검토를 진행할 수 있습니다.")
+                .build();
+    }
+
+    private String buildSummary(
+            ReturnReasonType reasonType,
+            ReturnAssistResponseDto.ReviewPriority reviewPriority,
+            ReturnAssistResponseDto.EvidenceStatus evidenceStatus) {
+        String reasonLabel = getReturnReasonTypeLabel(reasonType);
+        if (reasonType == ReturnReasonType.CHANGE_OF_MIND) {
+            return "고객은 단순 변심 반품을 요청하고 있습니다. "
+                    + "이미지 증빙 판단보다 반품 가능 기간, 사용 흔적, 구성품 및 포장 상태 확인이 더 중요한 건입니다. "
+                    + "정책 기준과 환불 조건을 먼저 확인하세요.";
+        }
+        if (reasonType == ReturnReasonType.ORDER_MISTAKE) {
+            return "고객은 주문 실수 성격의 반품을 요청하고 있습니다. "
+                    + "이미지 판정보다 실제 주문 옵션과 상품 상태, 재판매 가능 여부를 확인하는 것이 핵심입니다. "
+                    + "정책상 처리 가능 조건을 먼저 검토하세요.";
+        }
+
+        String claimSentence = "고객은 " + reasonLabel + "을 주장하고 있습니다.";
+        String evidenceSentence = evidenceStatus.getDetail();
+        String nextSentence;
+        if ("HIGH".equals(reviewPriority.getCode())) {
+            nextSentence = "추가 자료를 먼저 보완받은 뒤 승인/거절 판단으로 넘어가는 편이 안전합니다.";
+        } else if ("MEDIUM".equals(reviewPriority.getCode())) {
+            nextSentence = "현재 자료와 주문 정보를 함께 대조하며 확인 포인트를 순서대로 검토하세요.";
+        } else {
+            nextSentence = "현재 자료 기준으로 기본 절차에 따라 1차 검토를 진행할 수 있습니다.";
+        }
+        return claimSentence + " " + evidenceSentence + " " + nextSentence;
+    }
+
+    private List<String> buildCheckPoints(
+            ReturnReasonType reasonType,
+            List<String> evidenceGaps) {
+        List<String> checkPoints = new ArrayList<>();
+        boolean imageRequired = isImageEvidenceImportant(reasonType);
+
+        if (reasonType == ReturnReasonType.CHANGE_OF_MIND) {
+            addIfAbsent(checkPoints, "반품 가능 기간 확인");
+            addIfAbsent(checkPoints, "사용 흔적·구성품 상태 확인");
+            addIfAbsent(checkPoints, "배송비 차감 기준 확인");
+            return limitList(checkPoints, 3);
+        }
+        if (reasonType == ReturnReasonType.ORDER_MISTAKE) {
+            addIfAbsent(checkPoints, "주문 옵션 일치 여부 확인");
+            addIfAbsent(checkPoints, "재판매 가능 상태 확인");
+            addIfAbsent(checkPoints, "처리 기준 확인");
+            return limitList(checkPoints, 3);
+        }
+        if (imageRequired && containsAny(evidenceGaps, "REQUIRED_IMAGE_MISSING", "NO_IMAGE_EVIDENCE")) {
+            addIfAbsent(checkPoints, "주문 상품과 촬영 상품 일치 여부 확인");
+        }
+        if (containsAny(evidenceGaps, "ADDITIONAL_IMAGE_RECOMMENDED")) {
+            addIfAbsent(checkPoints, "추가 촬영 요청 필요 여부 확인");
+        }
+        if (containsAny(evidenceGaps, "REASON_TEXT_TOO_SHORT")) {
+            addIfAbsent(checkPoints, "상세 사유와 증빙 일치 여부 확인");
+        }
+        addIfAbsent(checkPoints, "주문 옵션·배송 상태 일치 여부 확인");
+        if (checkPoints.isEmpty()) {
+            addIfAbsent(checkPoints, "주문 정보와 상품 상태 확인");
+        }
+        return limitList(checkPoints, 3);
+    }
+
+    private String buildPolicyReviewDetail(ReturnReasonType reasonType) {
+        if (reasonType == ReturnReasonType.CHANGE_OF_MIND) {
+            return "단순 변심은 이미지 증빙보다 반품 가능 기간, 사용 흔적, 구성품 및 포장 상태 확인이 중요합니다.";
+        }
+        if (reasonType == ReturnReasonType.ORDER_MISTAKE) {
+            return "주문 실수는 이미지 판정보다 실제 주문 옵션과 상품 상태, 재판매 가능 여부 확인이 중요합니다.";
+        }
+        return "정책 기준 확인이 우선인 건입니다.";
+    }
+
+    private ReturnAssistResponseDto.Signals buildSignals(List<String> insightCodes) {
+        List<String> customerSignals = new ArrayList<>();
+        for (String factor : insightCodes) {
+            String label = getCustomerHistoryReferenceLabel(factor);
+            if (!label.isBlank()) {
+                addIfAbsent(customerSignals, label);
+            }
+        }
+
+        return ReturnAssistResponseDto.Signals.builder()
+                .customerSignals(limitList(customerSignals, 2))
+                .build();
+    }
+
+    private String getCustomerHistoryReferenceLabel(String code) {
+        if (code == null) {
+            return "";
+        }
+        return switch (code) {
+            case "RECENT_RETURN_FREQUENCY_HIGH" -> "최근 90일 반품 이력이 많은 편입니다.";
+            case "RECENT_RETURN_FREQUENCY" -> "최근 90일 반품 이력이 있습니다.";
+            case "SAME_ADDRESS_REPEAT_HIGH" -> "동일 배송지 기준 반복 반품 이력이 다수 있습니다.";
+            case "SAME_ADDRESS_REPEAT" -> "동일 배송지 기준 반복 반품 이력이 있습니다.";
+            case "REJECTED_HISTORY_HIGH" -> "과거 반려 이력이 다수 있습니다.";
+            case "REJECTED_HISTORY" -> "과거 반려 이력이 있습니다.";
+            case "DISPUTE_LIKE_HISTORY" -> "과거 분쟁성 처리 이력이 확인됩니다.";
+            case "HIGH_RETURN_AMOUNT" -> "고액 반품 건입니다.";
+            case "NO_SPECIAL_HISTORY" -> "";
+            default -> "";
+        };
+    }
+
+    private String getReturnReasonTypeLabel(ReturnReasonType reasonType) {
+        if (reasonType == null) {
+            return "기타";
+        }
+        return switch (reasonType) {
+            case CHANGE_OF_MIND -> "단순 변심";
+            case ORDER_MISTAKE -> "주문 실수";
+            case DEFECT -> "상품 불량·하자";
+            case WRONG_ITEM -> "오배송";
+            case OTHER -> "기타";
+        };
+    }
+
+    private boolean isImageEvidenceImportant(ReturnReasonType reasonType) {
+        return reasonType == ReturnReasonType.DEFECT
+                || reasonType == ReturnReasonType.WRONG_ITEM
+                || reasonType == ReturnReasonType.OTHER;
+    }
+
+    private boolean containsAny(List<String> values, String... targets) {
+        List<String> safeValues = safeList(values);
+        for (String target : targets) {
+            if (safeValues.contains(target)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void addIfAbsent(List<String> target, String value) {
+        if (value == null || value.isBlank() || target.contains(value)) {
+            return;
+        }
+        target.add(value);
+    }
+
+    private List<String> limitList(List<String> values, int maxSize) {
+        if (values == null || values.isEmpty()) {
+            return List.of();
+        }
+        return values.stream()
+                .filter(value -> value != null && !value.isBlank())
+                .distinct()
+                .limit(maxSize)
+                .collect(Collectors.toList());
     }
 
     /**
@@ -967,7 +1164,7 @@ public class ReturnService {
                 .orderNo(orderItem.getOrder().getOrderNo())
                 .productNo(orderItem.getProduct().getProductNo())
                 .productName(orderItem.getProduct().getProductName())
-                .productImageUrl(orderItem.getProduct().getProductImageUrl())
+                .productImageUrl(productCustomerImageUrlResolver.resolveDisplayUrlOrEmpty(orderItem.getProduct()))
                 .optionNo(orderItem.getOption() != null ? orderItem.getOption().getOptionNo() : null)
                 .color(orderItem.getOption() != null ? orderItem.getOption().getColor() : null)
                 .size(orderItem.getOption() != null ? orderItem.getOption().getSize() : null)
@@ -977,8 +1174,6 @@ public class ReturnService {
                 .returnStatus(returnEntity.getReturnStatus())
                 .returnRequestedAt(returnEntity.getReturnRequestedAt())
                 .returnReasonType(returnEntity.getReturnReasonType())
-                .returnRiskScore(returnEntity.getReturnRiskScore())
-                .returnRiskTier(returnEntity.getReturnRiskTier())
                 .returnReason(returnEntity.getReturnReason())
                 .returnAmount(returnEntity.getReturnAmount())
                 .returnTrackingNumber(returnEntity.getReturnTrackingNumber())
@@ -997,38 +1192,6 @@ public class ReturnService {
         } catch (Exception ignored) {
             return Collections.emptyList();
         }
-    }
-
-    private List<String> getOpenAiImageUrls(ReturnEntity returnEntity) {
-        String base = appPublicBaseUrl != null ? appPublicBaseUrl.replaceAll("/+$", "") : "http://localhost:8080";
-        return returnImageRepository.findByReturnEntityOrderByIdAsc(returnEntity).stream()
-                .map(image -> {
-                    UploadedFileEntity file = image.getFile();
-                    if (file == null) {
-                        return null;
-                    }
-                    if (Boolean.TRUE.equals(file.getIsPrivate())) {
-                        return signedFileUrlService.createSignedDownloadUrl(file.getFileId());
-                    }
-                    return String.format("%s/uploads/%s/%s", base, file.getCategory(), file.getStoredName());
-                })
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
-    }
-
-    private boolean shouldUseOpenAiVision(
-            ReturnFraudService.FraudResult fraud,
-            ReturnReasonType reasonType,
-            boolean hasImageEvidence) {
-        ReturnRiskTier level = fraud != null ? fraud.riskLevel() : ReturnRiskTier.LOW;
-        if (level == ReturnRiskTier.HIGH) {
-            return true;
-        }
-        if (level == ReturnRiskTier.MEDIUM) {
-            boolean reasonEligible = reasonType == ReturnReasonType.DEFECT || reasonType == ReturnReasonType.WRONG_ITEM;
-            return reasonEligible && hasImageEvidence;
-        }
-        return false;
     }
 
     /**
@@ -1129,34 +1292,4 @@ public class ReturnService {
         }
     }
 
-    /**
-     * 신청 시점 기준 위험 점수 (목록/상세 분기용 스냅샷).
-     * - 90일 고객 반품 건수는 '이번 신청 직전' 건수 기준 (이번 건 포함 시 임계값에 맞춤).
-     */
-    private int computeReturnRiskScore(Long customerId, long returnAmount, ReturnReasonType type) {
-        int score = switch (type) {
-            case CHANGE_OF_MIND, ORDER_MISTAKE -> 0;
-            case DEFECT, WRONG_ITEM -> 30;
-            case OTHER -> 15;
-        };
-        if (returnAmount >= 100_000L) {
-            score += 20;
-        }
-        LocalDateTime since90 = LocalDateTime.now().minusDays(90);
-        long cnt90 = returnRepository.countByCustomerRequestedSince(customerId, since90);
-        if (cnt90 >= 2) {
-            score += 25;
-        }
-        return score;
-    }
-
-    private static ReturnRiskTier toRiskTier(int score) {
-        if (score >= 70) {
-            return ReturnRiskTier.HIGH;
-        }
-        if (score >= 40) {
-            return ReturnRiskTier.MEDIUM;
-        }
-        return ReturnRiskTier.LOW;
-    }
 }

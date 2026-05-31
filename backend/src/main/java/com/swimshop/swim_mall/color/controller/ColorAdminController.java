@@ -124,8 +124,13 @@ public class ColorAdminController {
         authService.requireRole(session, AccountRole.ADMIN);
         List<ColorEntity> colors = colorRepository.findByIsActiveTrueOrderBySortOrderAscLabelAsc();
         List<Object> resp = colors.stream().map(c -> {
-            List<String> synonyms = colorSynonymRepository.findByColor_Code(c.getCode()).stream()
-                    .map(ColorSynonymEntity::getSynonym)
+            List<java.util.Map<String, Object>> synonyms = colorSynonymRepository.findByColor_Code(c.getCode()).stream()
+                    .map(s -> {
+                        java.util.Map<String, Object> row = new java.util.LinkedHashMap<>();
+                        row.put("id", s.getId());
+                        row.put("synonym", s.getSynonym());
+                        return row;
+                    })
                     .toList();
             return java.util.Map.of(
                     "code", c.getCode(),

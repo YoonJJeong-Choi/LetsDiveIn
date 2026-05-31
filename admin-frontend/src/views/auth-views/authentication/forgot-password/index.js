@@ -1,19 +1,15 @@
 import React, { useState } from 'react'
 import { Card, Row, Col, Form, Input, Button, message } from "antd";
 import { MailOutlined } from '@ant-design/icons';
-import { useSelector } from 'react-redux';
 
 const backgroundStyle = {
-	backgroundImage: 'url(/img/others/img-17.jpg)',
-	backgroundRepeat: 'no-repeat',
-	backgroundSize: 'cover'
+	background: 'linear-gradient(135deg, #e6f4ff 0%, #f5f5f5 50%, #ffffff 100%)',
+	minHeight: '100%',
 }
 
 const ForgotPassword = () => {
 	const [form] = Form.useForm();
 	const [loading, setLoading] = useState(false);
-
-	const theme = useSelector(state => state.theme.currentTheme)
 
 	const onSend = values => {
 		setLoading(true)
@@ -31,7 +27,7 @@ const ForgotPassword = () => {
 						<Card>
 							<div className="my-2">
 								<div className="text-center">
-									<img className="img-fluid" src={`/img/${theme === 'light' ? 'logo.png': 'logo-white.png'}`} alt="" />
+									<img className="img-fluid" src="/img/LetsDiveIn03.png" alt="SWIM MALL logo" style={{ maxWidth: 160 }} />
 									<h3 className="mt-3 font-weight-bold">Forgot Password?</h3>
 									<p className="mb-4">Enter your Email to reset password</p>
 								</div>

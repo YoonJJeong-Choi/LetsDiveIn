@@ -3,6 +3,7 @@ package com.swimshop.swim_mall.review.repository;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -46,4 +47,26 @@ public interface ReviewRepository extends JpaRepository<ReviewEntity, Long> {
            "WHERE p.partner.partnerId = :partnerId " +
            "ORDER BY r.reviewCreatedAt DESC")
     List<ReviewEntity> findByPartnerId(@Param("partnerId") Long partnerId);
+
+    /**
+     * 파트너 소유 상품의 리뷰만, 옵션/기간 조건을 DB에서 먼저 적용한 뒤 최신순 상한 건수까지 조회합니다.
+     * AI 분석 후보 조회용이며 Pageable과 호환되도록 FETCH JOIN은 사용하지 않습니다.
+     */
+    @Query("SELECT r FROM ReviewEntity r " +
+           "LEFT JOIN r.orderItem oi " +
+           "LEFT JOIN oi.option opt " +
+           "WHERE r.product.partner.partnerId = :partnerId " +
+           "AND r.product.productNo = :productNo " +
+           "AND r.reviewCreatedAt >= COALESCE(:fromAt, r.reviewCreatedAt) " +
+           "AND r.reviewCreatedAt <= COALESCE(:toAt, r.reviewCreatedAt) " +
+           "AND (:optionFilterDisabled = true OR opt.optionNo IN :optionNos) " +
+           "ORDER BY r.reviewCreatedAt DESC")
+    List<ReviewEntity> findPartnerAiCandidates(
+            @Param("partnerId") Long partnerId,
+            @Param("productNo") Long productNo,
+            @Param("fromAt") java.time.LocalDateTime fromAt,
+            @Param("toAt") java.time.LocalDateTime toAt,
+            @Param("optionFilterDisabled") boolean optionFilterDisabled,
+            @Param("optionNos") List<Long> optionNos,
+            Pageable pageable);
 }

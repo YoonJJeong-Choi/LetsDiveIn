@@ -2,9 +2,9 @@ import Image from "next/image";
 import React from "react";
 import Link from "next/link";
 export const metadata = {
-  title:
-    "Page Not Found || Modave - Multipurpose React Nextjs eCommerce Template",
-  description: "Modave - Multipurpose React Nextjs eCommerce Template",
+  title: "페이지를 찾을 수 없습니다 · Let’s Dive In",
+  description:
+    "요청하신 주소의 페이지를 찾을 수 없습니다.",
 };
 
 export default function PageNotFoundPage() {
@@ -23,16 +23,16 @@ export default function PageNotFoundPage() {
             />
           </div>
           <div className="content">
-            <div className="heading">Oops!</div>
+            <div className="heading">404</div>
             <div>
-              <h2 className="title mb_4">Something is Missing.</h2>
+              <h2 className="title mb_4">페이지를 찾을 수 없습니다</h2>
               <div className="text body-text-1 text-secondary">
-                The page you are looking for cannot be found. take a break
-                before trying again
+                주소가 잘못 입력되었거나, 삭제·이동된 페이지일 수 있습니다.
+                입력하신 주소를 다시 확인해 주세요.
               </div>
             </div>
             <Link href={`/`} className="tf-btn btn-fill">
-              <span className="text text-button">Back To Homepage</span>
+              <span className="text text-button">홈으로 이동</span>
             </Link>
           </div>
         </div>

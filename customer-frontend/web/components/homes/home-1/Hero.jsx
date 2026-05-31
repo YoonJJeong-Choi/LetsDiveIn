@@ -25,13 +25,16 @@ export default function Hero() {
         {slides.map((slide, index) => (
           <SwiperSlide key={index}>
             <div className="wrap-slider">
-              <Image
-                alt={slide.alt}
-                src={slide.imgSrc}
-                width={1920}
-                height={803}
-                priority
-              />
+              <div className="hero-slide-frame">
+                <Image
+                  alt={slide.alt}
+                  src={slide.imgSrc}
+                  fill
+                  sizes="100vw"
+                  priority={index === 0}
+                  className="hero-slide-image"
+                />
+              </div>
               <div className="box-content">
                 <div className="content-slider">
                   <div className="box-title-slider">
@@ -49,7 +52,7 @@ export default function Hero() {
                   </div>
                   <div className="fade-item fade-item-3 box-btn-slider">
                     <Link
-                      href={`/shop-default-grid`}
+                      href={slide.href ?? "/shop-default-grid"}
                       className="tf-btn btn-fill btn-white"
                     >
                       <span className="text">{slide.btnText}</span>

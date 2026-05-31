@@ -5,6 +5,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import CountdownTimer from "../common/Countdown";
 import { useContextElement } from "@/context/Context";
+import { formatKrw } from "@/lib/price/formatKrw";
+import { DEFAULT_PRODUCT_PLACEHOLDER } from "@/lib/media/productImage";
+
+function safeCardImage(url) {
+  if (typeof url !== "string") return DEFAULT_PRODUCT_PLACEHOLDER;
+  const t = url.trim();
+  return t || DEFAULT_PRODUCT_PLACEHOLDER;
+}
+
 export default function ProductCard1({
   product,
   gridClass = "",
@@ -12,22 +21,20 @@ export default function ProductCard1({
   isNotImageRatio = false,
   radiusClass = "",
 }) {
-  const [currentImage, setCurrentImage] = useState(product.imgSrc);
+  const [currentImage, setCurrentImage] = useState(
+    safeCardImage(product.imgSrc),
+  );
   const router = useRouter();
 
   const {
     setQuickAddItem,
-    addToWishlist,
-    isAddedtoWishlist,
-    addToCompareItem,
-    isAddedtoCompareItem,
     setQuickViewItem,
     addProductToCart,
     isAddedToCartProducts,
   } = useContextElement();
 
   useEffect(() => {
-    setCurrentImage(product.imgSrc);
+    setCurrentImage(safeCardImage(product.imgSrc));
   }, [product]);
 
   const goToDetail = () => {
@@ -65,7 +72,7 @@ export default function ProductCard1({
 
           <Image
             className="lazyload img-hover"
-            src={product.imgHover}
+            src={safeCardImage(product.imgHover)}
             alt={product.title}
             width={600}
             height={800}
@@ -172,8 +179,8 @@ export default function ProductCard1({
         {product.sizes && (
           <div className="variant-wrap size-list">
             <ul className="variant-box">
-              {product.sizes.map((size) => (
-                <li key={size} className="size-item">
+              {product.sizes.map((size, idx) => (
+                <li key={`sz-${idx}-${String(size)}`} className="size-item">
                   {size}
                 </li>
               ))}
@@ -201,31 +208,6 @@ export default function ProductCard1({
           ""
         )}
         <div className="list-product-btn">
-          <a
-            onClick={() => addToWishlist(product.id)}
-            className="box-icon wishlist btn-icon-action"
-          >
-            <span className="icon icon-heart" />
-            <span className="tooltip">
-              {isAddedtoWishlist(product.id)
-                ? "Already Wishlished"
-                : "Wishlist"}
-            </span>
-          </a>
-          <a
-            href="#compare"
-            data-bs-toggle="offcanvas"
-            aria-controls="compare"
-            onClick={() => addToCompareItem(product.id)}
-            className="box-icon compare btn-icon-action"
-          >
-            <span className="icon icon-gitDiff" />
-            <span className="tooltip">
-              {isAddedtoCompareItem(product.id)
-                ? "Already compared"
-                : "Compare"}
-            </span>
-          </a>
           <a
             href="#quickView"
             onClick={() => setQuickViewItem(product)}
@@ -311,7 +293,7 @@ export default function ProductCard1({
                     pointerEvents: isDisabled ? 'none' : 'auto'
                   }}
                 >
-                  {isOutOfStock ? "품절" : "ADD TO CART"}
+                  {isOutOfStock ? "품절" : "장바구니 담기"}
                 </a>
               );
             } else if (product.addToCart == "Quick Add") {
@@ -324,7 +306,7 @@ export default function ProductCard1({
                       e.preventDefault();
                       return;
                     }
-                    setQuickAddItem(product.id);
+                    setQuickAddItem(product);
                   }}
                   data-bs-toggle={isDisabled ? undefined : "modal"}
                   style={{
@@ -356,8 +338,8 @@ export default function ProductCard1({
                   {isOutOfStock 
                     ? "품절" 
                     : isAddedToCartProducts(product.id)
-                      ? "Already Added"
-                      : "ADD TO CART"}
+                      ? "장바구니에 추가됨"
+                      : "장바구니 담기"}
                 </a>
               );
             }
@@ -365,14 +347,23 @@ export default function ProductCard1({
         </div>
       </div>
       <div className="card-product-info">
+        {product.brandName && (
+          <Link
+            href={`/search-result?brand=${encodeURIComponent(product.brandName)}`}
+            className="text-secondary"
+            style={{ fontSize: "12px", marginBottom: "2px", display: "block", textDecoration: "none" }}
+          >
+            {product.brandName}
+          </Link>
+        )}
         <Link href={`/product-detail/${product.id}`} className="title link">
           {product.title}
         </Link>
         <span className="price">
           {product.oldPrice && (
-            <span className="old-price">₩{product.oldPrice.toLocaleString()}</span>
+            <span className="old-price">{formatKrw(product.oldPrice)}</span>
           )}{" "}
-          ₩{product.price?.toLocaleString()}
+          {formatKrw(product.price)}
         </span>
         {/* 재고 정보 표시 (5개 이하일 때만) */}
         {(() => {
@@ -481,14 +472,14 @@ export default function ProductCard1({
               <li
                 key={index}
                 className={`list-color-item color-swatch ${
-                  currentImage == color.imgSrc ? "active" : ""
+                  currentImage == safeCardImage(color.imgSrc) ? "active" : ""
                 } ${color.bgColor == "bg-white" ? "line" : ""}`}
-                onMouseOver={() => setCurrentImage(color.imgSrc)}
+                onMouseOver={() => setCurrentImage(safeCardImage(color.imgSrc))}
               >
                 <span className={`swatch-value ${color.bgColor}`} />
                 <Image
                   className="lazyload"
-                  src={color.imgSrc}
+                  src={safeCardImage(color.imgSrc)}
                   alt="color variant"
                   width={600}
                   height={800}

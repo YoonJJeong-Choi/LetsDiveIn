@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { applyForPartnership } from "@/lib/api/partner";
 import { uploadFile } from "@/lib/api/file";
+import { getPartnerAdminLoginUrl } from "@/lib/adminUrls";
 
 export default function PartnerApplication() {
   const router = useRouter();
@@ -480,7 +481,10 @@ export default function PartnerApplication() {
             <p className="text-secondary mt-3">
               입점 신청 시 입력하신 정보는 사업자 정보 확인 용도로만 사용됩니다.
             </p>
-            <Link href={`/login`} className="tf-btn btn-fill mt-4">
+            <Link
+              href={getPartnerAdminLoginUrl()}
+              className="tf-btn btn-fill mt-4"
+            >
               <span className="text text-button">로그인</span>
             </Link>
           </div>

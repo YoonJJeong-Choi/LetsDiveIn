@@ -13,8 +13,10 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Getter
+@Setter
 @NoArgsConstructor
 public class EventRequestDto {
 
@@ -32,6 +34,9 @@ public class EventRequestDto {
 
     @NotNull(message = "고객 이벤트 종료일시는 필수입니다.")
     private LocalDateTime customerEventEndAt;
+
+    /** null이면 고객 몰 비공개(파트너 전용 노출 가능). 설정 시 해당 시각부터 고객 API 노출 검토. */
+    private LocalDateTime customerExposeAt;
 
     private Boolean partnerApplyEnabled;
     private LocalDateTime partnerApplyStartAt;

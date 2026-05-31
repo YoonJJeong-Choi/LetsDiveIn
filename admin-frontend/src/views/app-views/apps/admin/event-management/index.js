@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import dayjs from 'dayjs';
 import {
 	Card,
@@ -10,48 +11,93 @@ import {
 	Input,
 	InputNumber,
 	Select,
-	Switch,
+	Radio,
 	DatePicker,
-	TimePicker,
 	Space,
 	Tag,
 	message,
 	Statistic,
 	Row,
 	Col,
-	Tabs
+	Tabs,
+	Empty,
+	Spin,
+	Tooltip,
+	Typography,
+	Upload
 } from 'antd';
 import Chart from 'react-apexcharts';
-import { PlusOutlined, EditOutlined, ReloadOutlined } from '@ant-design/icons';
+import {
+	AppstoreOutlined,
+	CalendarOutlined,
+	EyeOutlined,
+	PlusOutlined,
+	ReloadOutlined,
+	UnorderedListOutlined,
+	UploadOutlined,
+	DeleteOutlined
+} from '@ant-design/icons';
 import AdminService from 'services/AdminService';
+import FileService from 'services/FileService';
 
 const { RangePicker } = DatePicker;
 const { TextArea } = Input;
+const { Text } = Typography;
+const VIEW_LIST = 'LIST';
+const VIEW_GRID = 'GRID';
 
-const EVENT_STATUSES = ['DRAFT', 'SCHEDULED', 'ACTIVE', 'ENDED', 'INACTIVE'];
+const beforeUploadImage = (file) => {
+	const isAllowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type);
+	if (!isAllowed) {
+		message.error('이미지 파일만 업로드할 수 있습니다 (jpg, png, gif, webp).');
+		return Upload.LIST_IGNORE;
+	}
+	const isLt10M = file.size / 1024 / 1024 < 10;
+	if (!isLt10M) {
+		message.error('파일 용량은 10MB 이하만 허용됩니다.');
+		return Upload.LIST_IGNORE;
+	}
+	return true;
+};
+
+const EVENT_STATUSES = ['PRIVATE', 'PUBLISHED', 'ENDED'];
 const STATUS_LABELS = {
-	DRAFT: '임시 저장',
-	SCHEDULED: '오픈 예정',
-	ACTIVE: '진행 중',
-	ENDED: '종료',
-	INACTIVE: '비활성화'
+	PRIVATE: '비공개',
+	PUBLISHED: '공개',
+	ENDED: '종료'
 };
 
 const EVENT_MODE_OPTIONS = [
-	{ value: 'ADMIN_ONLY', label: '관리자 단독' },
-	{ value: 'PARTNER_PARTICIPATION', label: '파트너 참여형' }
+	{ value: 'ADMIN_ONLY', label: '운영 직접 등록' },
+	{ value: 'PARTNER_PARTICIPATION', label: '파트너 신청·등록' }
 ];
 
 const EVENT_TYPE_OPTIONS = [
-	// backend에서 내려오는 eventType 값(영문) 기준으로 value를 맞춰야
-	// edit modal 진입 시 영문이 그대로 노출되지 않습니다.
-	{ value: 'SALE', label: '세일(SALE)' },
-	{ value: 'GENERAL', label: '일반' },
-	{ value: 'COUPON', label: '쿠폰' },
+	// backend EventType enum과 동일해야 함 (SALE | POINT | NOTICE)
+	{ value: 'SALE', label: '세일' },
 	{ value: 'POINT', label: '포인트' },
-	{ value: 'COMMENT', label: '댓글' },
-	{ value: 'ATTENDANCE', label: '출석' }
+	{ value: 'NOTICE', label: '공지' }
 ];
+
+/** 참여 형태별 허용 종류 — backend EventService 검증과 동일 */
+const EVENT_TYPES_BY_MODE = {
+	ADMIN_ONLY: ['POINT', 'NOTICE'],
+	PARTNER_PARTICIPATION: ['SALE', 'POINT']
+};
+
+const getEventTypeOptionsForMode = (mode) => {
+	if (!mode) return EVENT_TYPE_OPTIONS;
+	const allowed = EVENT_TYPES_BY_MODE[mode];
+	if (!allowed?.length) return EVENT_TYPE_OPTIONS;
+	return EVENT_TYPE_OPTIONS.filter((o) => allowed.includes(o.value));
+};
+
+const getDefaultEventTypeForMode = (mode) => {
+	const opts = getEventTypeOptionsForMode(mode);
+	const point = opts.find((o) => o.value === 'POINT');
+	if (point) return 'POINT';
+	return opts[0]?.value;
+};
 
 const SALE_DISCOUNT_TYPE_OPTIONS = [
 	{ value: 'PERCENT', label: '정률(%)' },
@@ -59,32 +105,185 @@ const SALE_DISCOUNT_TYPE_OPTIONS = [
 ]
 
 const POINT_TARGET_TYPE_OPTIONS = [
-	{ value: 'ALL', label: '전체(ALL)' },
-	{ value: 'PARTNER', label: '파트너(PARTNER)' },
-	{ value: 'PRODUCT', label: '상품(PRODUCT)' },
-	{ value: 'OPTION', label: '옵션(OPTION)' },
-	{ value: 'CATEGORY', label: '카테고리(CATEGORY)' },
-	{ value: 'MIN_ORDER_AMOUNT', label: '최소주문금액(MIN_ORDER_AMOUNT)' }
+	{ value: 'ALL', label: '전체' },
+	{ value: 'PARTNER', label: '파트너' },
+	{ value: 'PRODUCT', label: '상품' },
+	{ value: 'OPTION', label: '옵션' },
+	{ value: 'CATEGORY', label: '카테고리' },
+	{ value: 'MIN_ORDER_AMOUNT', label: '최소주문금액' }
 ]
+
+/** 파트너 참여형: 특정 파트너/상품/옵션 고정은 다자 신청 흐름과 맞지 않아 폼에서 숨김 */
+const POINT_TARGET_TYPES_HIDDEN_FOR_PARTNER_MODE = ['PARTNER', 'PRODUCT', 'OPTION']
+
+const getPointTargetTypeOptionsForMode = (mode) => {
+	if (mode === 'PARTNER_PARTICIPATION') {
+		return POINT_TARGET_TYPE_OPTIONS.filter((o) => !POINT_TARGET_TYPES_HIDDEN_FOR_PARTNER_MODE.includes(o.value))
+	}
+	return POINT_TARGET_TYPE_OPTIONS
+}
 
 const CATEGORY_OPTIONS = [
 	{ value: 'SWIMSUIT_MEN', label: '남성 수영복' },
 	{ value: 'SWIMSUIT_WOMEN', label: '여성 수영복' },
 	{ value: 'SWIMSUIT_KIDS', label: '아동 수영복' },
-	{ value: 'SWIM_CAP', label: '수영모자' },
-	{ value: 'SWIM_GOGGLES', label: '수영안경' },
+	{ value: 'SWIM_CAP', label: '수모' },
+	{ value: 'SWIM_GOGGLES', label: '수경' },
 	{ value: 'FINS', label: '오리발' },
 	{ value: 'SWIM_TOY', label: '수영용품' },
 	{ value: 'ETC', label: '기타' }
 ]
 
+const STATUS_COLORS = {
+	PRIVATE: 'default',
+	PUBLISHED: 'blue',
+	ENDED: 'green'
+};
+
+const EVENT_TYPE_LABELS = {
+	SALE: '세일',
+	POINT: '포인트',
+	NOTICE: '공지'
+};
+
+const EVENT_MODE_LABELS = {
+	ADMIN_ONLY: '관리자 단독',
+	PARTNER_PARTICIPATION: '파트너 참여형'
+};
+
+const STATUS_OPTIONS = [
+	{ value: '', label: '전체 상태' },
+	...EVENT_STATUSES.map((status) => ({
+		value: status,
+		label: STATUS_LABELS[status] || status
+	}))
+];
+
+const formatOperationDate = value => value ? dayjs(value).format('YYYY.MM.DD HH:mm') : '-';
+const formatOperationDateOnly = value => value ? dayjs(value).format('YYYY.MM.DD') : '-';
+
+const getCustomerExposureStatus = event => {
+	const now = dayjs();
+	const exposeAt = event?.customerExposeAt ? dayjs(event.customerExposeAt) : null;
+
+	if (event?.eventStatus === 'ENDED') {
+		return { label: '노출 종료', color: 'default' };
+	}
+	if (!exposeAt) {
+		return { label: '고객 미노출', color: 'default' };
+	}
+	if (now.isBefore(exposeAt)) {
+		return { label: '노출 예정', color: 'gold' };
+	}
+	return { label: '노출 중', color: 'blue' };
+};
+
+const getDdayText = event => {
+	const now = dayjs();
+	const start = event?.customerEventStartAt ? dayjs(event.customerEventStartAt) : null;
+	const end = event?.customerEventEndAt ? dayjs(event.customerEventEndAt) : null;
+
+	if (event?.eventStatus === 'ENDED') return '종료됨';
+	if (start && now.isBefore(start)) return `시작 D-${Math.max(0, start.startOf('day').diff(now.startOf('day'), 'day'))}`;
+	if (end && !now.isAfter(end)) return `종료 D-${Math.max(0, end.startOf('day').diff(now.startOf('day'), 'day'))}`;
+	return '기간 확인 필요';
+};
+
+const EventOperationHeader = ({ event }) => (
+	<div>
+		<Space size={6} wrap className="mb-2">
+			<Tag color={STATUS_COLORS[event.eventStatus] || 'default'}>{STATUS_LABELS[event.eventStatus] || event.eventStatus}</Tag>
+			<Tag>{EVENT_TYPE_LABELS[event.eventType] || event.eventType || '종류 미지정'}</Tag>
+			<Tag>{EVENT_MODE_LABELS[event.eventMode] || event.eventMode || '모드 미지정'}</Tag>
+			<Tag icon={<CalendarOutlined />}>{getDdayText(event)}</Tag>
+		</Space>
+		<h4 className="mb-1">{event.eventTitle || `이벤트 #${event.eventNo}`}</h4>
+		<Text type="secondary">#{event.eventNo}</Text>
+	</div>
+);
+
+const EventOperationSchedule = ({ event }) => (
+	<Space direction="vertical" size={4} className="w-100">
+		<div className="d-flex justify-content-between">
+			<Text type="secondary">공개 시작</Text>
+			<Text>{event.customerExposeAt ? formatOperationDate(event.customerExposeAt) : '미공개'}</Text>
+		</div>
+		<div className="d-flex justify-content-between">
+			<Text type="secondary">이벤트 기간</Text>
+			<Text>{formatOperationDateOnly(event.customerEventStartAt)} ~ {formatOperationDateOnly(event.customerEventEndAt)}</Text>
+		</div>
+		{event.eventMode === 'PARTNER_PARTICIPATION' && (
+			<div className="d-flex justify-content-between">
+				<Text type="secondary">파트너 신청</Text>
+				<Text>{formatOperationDateOnly(event.partnerApplyStartAt)} ~ {formatOperationDateOnly(event.partnerApplyEndAt)}</Text>
+			</div>
+		)}
+	</Space>
+);
+
+const EventOperationStatus = ({ event }) => {
+	const exposureStatus = getCustomerExposureStatus(event);
+
+	return (
+		<Space direction="vertical" size={6}>
+			<div>
+				<Text type="secondary" className="mr-2">고객 노출</Text>
+				<Tag color={exposureStatus.color}>{exposureStatus.label}</Tag>
+			</div>
+		</Space>
+	);
+};
+
+const EventOperationActions = ({ eventNo, onEdit, onPerformance }) => (
+	<Space>
+		<Tooltip title="이벤트 수정 모달을 엽니다.">
+			<Button icon={<EyeOutlined />} onClick={() => onEdit(eventNo)}>상세·수정</Button>
+		</Tooltip>
+		<Button type="link" onClick={() => onPerformance(eventNo)}>실적</Button>
+	</Space>
+);
+
+const EventOperationListItem = ({ event, onEdit, onPerformance }) => (
+	<Card>
+		<Row align="middle" gutter={[16, 16]}>
+			<Col xs={24} lg={7}>
+				<EventOperationHeader event={event} />
+			</Col>
+			<Col xs={24} lg={7}>
+				<EventOperationSchedule event={event} />
+			</Col>
+			<Col xs={24} lg={5}>
+				<EventOperationStatus event={event} />
+			</Col>
+			<Col xs={24} lg={5}>
+				<div className="text-right">
+					<EventOperationActions eventNo={event.eventNo} onEdit={onEdit} onPerformance={onPerformance} />
+				</div>
+			</Col>
+		</Row>
+	</Card>
+);
+
+const EventOperationGridItem = ({ event, onEdit, onPerformance }) => (
+	<Card>
+		<div className="mb-3">
+			<EventOperationHeader event={event} />
+		</div>
+		<EventOperationSchedule event={event} />
+		<div className="mt-3">
+			<EventOperationStatus event={event} />
+		</div>
+		<div className="d-flex justify-content-end align-items-center mt-3">
+			<EventOperationActions eventNo={event.eventNo} onEdit={onEdit} onPerformance={onPerformance} />
+		</div>
+	</Card>
+);
+
 const EventManagement = () => {
+	const location = useLocation();
 	const [loading, setLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [events, setEvents] = useState([]);
-	const [currentPage, setCurrentPage] = useState(1);
-	const [pageSize, setPageSize] = useState(10);
-	const [totalItems, setTotalItems] = useState(0);
 	const [participants, setParticipants] = useState([]);
 	const [modalVisible, setModalVisible] = useState(false);
 	const [editingEvent, setEditingEvent] = useState(null);
@@ -101,28 +300,26 @@ const EventManagement = () => {
 	const [perfData, setPerfData] = useState(null);
 	const [endedRows, setEndedRows] = useState([]);
 	const [activeTab, setActiveTab] = useState('manage');
+	const [eventView, setEventView] = useState(VIEW_GRID);
 	const [selectedPerfRow, setSelectedPerfRow] = useState(null);
 	const [timeseries, setTimeseries] = useState([]);
 	const [topType, setTopType] = useState('partner');
 	const [topData, setTopData] = useState([]);
-	const [topLimit, setTopLimit] = useState(10);
-	const [perfExtraLoading, setPerfExtraLoading] = useState(false);
+	const [topLimit] = useState(10);
 	const [form] = Form.useForm();
 
-	const eventUseTime = Form.useWatch('eventUseTime', form);
-	const participationUseTime = Form.useWatch('participationUseTime', form);
 	const eventMode = Form.useWatch('eventMode', form);
 	const eventType = Form.useWatch('eventType', form);
 	const pointEventTargetType = Form.useWatch('pointEventTargetType', form);
+	const thumbnailUrl = Form.useWatch('thumbnailUrl', form);
 
-	const combineDateAndTime = (dateValue, timeValue) => {
-		if (!dateValue || !timeValue) return null;
-		return dateValue
-			.hour(timeValue.hour())
-			.minute(timeValue.minute())
-			.second(0)
-			.millisecond(0);
-	};
+	const eventSummary = useMemo(() => {
+		return events.reduce((acc, event) => {
+			acc.total += 1;
+			acc[event.eventStatus] = (acc[event.eventStatus] || 0) + 1;
+			return acc;
+		}, { total: 0, PRIVATE: 0, PUBLISHED: 0, ENDED: 0 });
+	}, [events]);
 
 	const toStartOfDay = (dateValue) => {
 		if (!dateValue) return null;
@@ -132,6 +329,26 @@ const EventManagement = () => {
 	const toEndOfDay = (dateValue) => {
 		if (!dateValue) return null;
 		return dateValue.hour(23).minute(59).second(59).millisecond(0);
+	};
+
+	const handleUploadThumbnail = async ({ file, onSuccess, onError }) => {
+		try {
+			setSaving(true);
+			const res = await FileService.uploadFile(file, 'event');
+			const data = res?.data || res;
+			const fileUrl = data?.fileUrl;
+			if (!fileUrl) {
+				throw new Error('업로드 응답에 fileUrl이 없습니다.');
+			}
+			form.setFieldsValue({ thumbnailUrl: fileUrl });
+			message.success('이벤트 썸네일이 업로드되었습니다.');
+			onSuccess && onSuccess({}, file);
+		} catch (error) {
+			onError && onError(error);
+			message.error(error?.response?.data?.message || error?.message || '이벤트 썸네일 업로드에 실패했습니다.');
+		} finally {
+			setSaving(false);
+		}
 	};
 
 	const formatDateTimeForList = (dt) => {
@@ -145,21 +362,25 @@ const EventManagement = () => {
 	useEffect(() => {
 		fetchEvents();
 	// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [currentPage, pageSize]);
+	}, []);
 
-	const normalizeResponseArray = (response) => {
+	const normalizeResponseArray = (response, collectionKey = null) => {
 		const data = response?.data ?? response;
-		return Array.isArray(data) ? data : [];
+		const payload = data?.data ?? data;
+		if (Array.isArray(payload)) return payload;
+		if (collectionKey && Array.isArray(payload?.[collectionKey])) return payload[collectionKey];
+		if (Array.isArray(payload?.items)) return payload.items;
+		return [];
 	};
 
 	const loadPointTargetOptions = async () => {
 		try {
 			const [partnersResponse, productsResponse] = await Promise.all([
 				AdminService.getAllPartners('APPROVED'),
-				AdminService.getAllProducts('ACTIVE')
+				AdminService.getAllProducts('ACTIVE', 1, 1000)
 			]);
 			const partners = normalizeResponseArray(partnersResponse);
-			const products = normalizeResponseArray(productsResponse);
+			const products = normalizeResponseArray(productsResponse, 'products');
 
 			setPartnerTargetOptions(
 				partners.map((p) => ({
@@ -237,6 +458,7 @@ const EventManagement = () => {
 			fetchEndedList(true);
 			refreshCharts();
 		}
+	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [activeTab]);
 
 	useEffect(() => {
@@ -248,7 +470,6 @@ const EventManagement = () => {
 
 	const refreshCharts = async () => {
 		try {
-			setPerfExtraLoading(true);
 			const fromStr = perfFrom ? dayjs(perfFrom).startOf('day').format('YYYY-MM-DDTHH:mm:ss') : null;
 			const toStr = perfTo ? dayjs(perfTo).endOf('day').format('YYYY-MM-DDTHH:mm:ss') : null;
 			const targetEventNo = selectedPerfRow?.eventNo || null;
@@ -260,8 +481,6 @@ const EventManagement = () => {
 			setTopData(topResp?.data ?? topResp ?? []);
 		} catch (e) {
 			console.error('차트 데이터 로드 실패:', e);
-		} finally {
-			setPerfExtraLoading(false);
 		}
 	};
 	const fetchEvents = async (overrides = {}) => {
@@ -274,19 +493,14 @@ const EventManagement = () => {
 
 		try {
 			setLoading(true);
-			// 0-based 호환: 서버가 0-based일 수 있으므로 page-1 보냄(음수 방지)
-			const reqPage = Math.max(0, (currentPage ?? 1) - 1);
-			console.log('[Admin Events] request params =>', { page: reqPage, size: pageSize, status: effectiveStatus, keyword: effectiveKeyword });
 			const resp = await AdminService.getAdminEventList({
 				status: effectiveStatus,
 				keyword: effectiveKeyword?.trim() || undefined,
-				page: reqPage,
-				size: pageSize
+				page: 1,
+				size: 60
 			});
 			const data = resp?.data ?? resp;
 			const rawItems = Array.isArray(data) ? data : (data?.events ?? data?.items ?? data?.data ?? []);
-			const meta = data?.meta;
-			console.log('[Admin Events] response meta =>', { page: meta?.page ?? data?.page, size: meta?.size ?? data?.size, total: meta?.total ?? data?.total, itemsCount: Array.isArray(rawItems) ? rawItems.length : 0 });
 
 			// 로컬 필터 백업(서버 필터 미지원 대비)
 			let filtered = Array.isArray(rawItems) ? rawItems : [];
@@ -299,21 +513,10 @@ const EventManagement = () => {
 			}
 
 			setEvents(filtered);
-			// 배열 fallback: total/페이지 계산 보정
-			const totalFromServer = Number((meta?.total ?? data?.total));
-			const total = Number.isFinite(totalFromServer) ? totalFromServer : filtered.length;
-			setTotalItems(total);
-
-			// 0-based 응답 페이지를 1-based로 보정
-			if (meta?.page !== undefined) setCurrentPage((meta.page ?? 0) + 1);
-			else if (data?.page !== undefined) setCurrentPage((data.page ?? 0) + 1);
-			if (meta?.size !== undefined) setPageSize(meta.size);
-			else if (data?.size !== undefined) setPageSize(data.size);
 		} catch (err) {
 			console.error('이벤트 목록 조회 실패:', err);
 			message.error(err?.response?.data?.message || '이벤트 목록을 불러오는데 실패했습니다.');
 			setEvents([]);
-			setTotalItems(0);
 		} finally {
 			setLoading(false);
 		}
@@ -324,21 +527,33 @@ const EventManagement = () => {
 		await fetchEvents({ status: nextStatus });
 	};
 
-	const openCreateModal = () => {
+	const openCreateModal = async () => {
 		setEditingEvent(null);
 		setParticipants([]);
 		form.resetFields();
-		loadPointTargetOptions();
+		await loadPointTargetOptions();
 		form.setFieldsValue({
-			eventStatus: 'DRAFT',
+			eventStatus: 'PRIVATE',
 			eventMode: 'ADMIN_ONLY',
+			eventType: getDefaultEventTypeForMode('ADMIN_ONLY'),
 			pointEventTargetType: 'ALL',
-			pointEventTargetValues: [],
-			eventUseTime: false,
-			participationUseTime: false
+			pointEventTargetValues: []
 		});
 		setModalVisible(true);
 	};
+
+	useEffect(() => {
+		const searchParams = new URLSearchParams(location.search);
+		if (searchParams.get('tab') === 'performance') {
+			setActiveTab('endedPerformance');
+		} else {
+			setActiveTab('manage');
+		}
+		if (searchParams.get('create') === '1') {
+			openCreateModal();
+		}
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [location.search]);
 
 	const openEditModal = async (eventNo) => {
 		try {
@@ -351,59 +566,53 @@ const EventManagement = () => {
 			const participantRows = participantsResponse?.data ?? participantsResponse ?? [];
 			setEditingEvent(detail);
 			setParticipants(Array.isArray(participantRows) ? participantRows : []);
-			loadPointTargetOptions();
+			// 멀티 Select는 option.value(문자열)와 초기값 타입이 맞아야 태그가 보입니다.
+			await loadPointTargetOptions();
 
 			const eventStart = detail.customerEventStartAt ? dayjs(detail.customerEventStartAt) : null;
 			const eventEnd = detail.customerEventEndAt ? dayjs(detail.customerEventEndAt) : null;
-
-			const isDefaultEventStart = eventStart?.isValid() && eventStart.hour() === 0 && eventStart.minute() === 0;
-			const isDefaultEventEnd =
-				eventEnd?.isValid() && eventEnd.hour() === 23 && eventEnd.minute() === 59 && eventEnd.second() === 59;
-			const inferredEventUseTime = !(isDefaultEventStart && isDefaultEventEnd);
 
 			const partnerApplyEnabledValue = detail.eventMode === 'PARTNER_PARTICIPATION';
 			const participationStart = detail.partnerApplyStartAt ? dayjs(detail.partnerApplyStartAt) : null;
 			const participationEnd = detail.partnerApplyEndAt ? dayjs(detail.partnerApplyEndAt) : null;
 
-			const isDefaultParticipationStart =
-				participationStart?.isValid() && participationStart.hour() === 0 && participationStart.minute() === 0;
-			const isDefaultParticipationEnd =
-				participationEnd?.isValid() &&
-				participationEnd.hour() === 23 &&
-				participationEnd.minute() === 59 &&
-				participationEnd.second() === 59;
+			const modeForDetail = detail.eventMode || 'ADMIN_ONLY';
+			let pointEventTargetType = detail.pointEventTargetType || 'ALL';
+			let pointEventTargetValues =
+				Array.isArray(detail.pointEventTargetValues) && detail.pointEventTargetValues.length > 0
+					? detail.pointEventTargetValues.map((v) => (v !== undefined && v !== null ? String(v) : '')).filter(Boolean)
+					: [];
+			let pointEventMinOrderAmount = detail.pointEventMinOrderAmount || null;
 
-			const inferredParticipationUseTime = partnerApplyEnabledValue ? !(isDefaultParticipationStart && isDefaultParticipationEnd) : false;
+			if (detail.eventType === 'POINT' && modeForDetail === 'PARTNER_PARTICIPATION') {
+				const allowedPt = getPointTargetTypeOptionsForMode(modeForDetail).map((o) => o.value);
+				if (!allowedPt.includes(pointEventTargetType)) {
+					pointEventTargetType = 'ALL';
+					pointEventTargetValues = [];
+					pointEventMinOrderAmount = null;
+				}
+			}
 
 			form.setFieldsValue({
 				eventTitle: detail.eventTitle,
 				eventContent: detail.eventContent,
 				eventStatus: detail.eventStatus,
-				eventMode: detail.eventMode || 'ADMIN_ONLY',
+				eventMode: modeForDetail,
 				customerEventStartAt: eventStart,
 				customerEventEndAt: eventEnd,
-				eventUseTime: inferredEventUseTime,
-				eventStartTime: eventStart,
-				eventEndTime: eventEnd,
 
 				partnerApplyEnabled: partnerApplyEnabledValue,
-				participationUseTime: inferredParticipationUseTime,
 				partnerApplyStartAt: partnerApplyEnabledValue ? participationStart : null,
 				partnerApplyEndAt: partnerApplyEnabledValue ? participationEnd : null,
-				partnerApplyStartTime: partnerApplyEnabledValue ? participationStart : null,
-				partnerApplyEndTime: partnerApplyEnabledValue ? participationEnd : null,
 
 				thumbnailUrl: detail.thumbnailUrl || '',
 				eventType: detail.eventType || '',
 				saleDiscountType: detail.saleDiscountType || null,
 				saleDiscountValue: detail.saleDiscountValue || null,
 				saleMaxDiscountAmount: detail.saleMaxDiscountAmount || null,
-				pointEventTargetType: detail.pointEventTargetType || 'ALL',
-				pointEventTargetValues:
-					(Array.isArray(detail.pointEventTargetValues) && detail.pointEventTargetValues.length > 0)
-						? detail.pointEventTargetValues
-						: [],
-				pointEventMinOrderAmount: detail.pointEventMinOrderAmount || null,
+				pointEventTargetType,
+				pointEventTargetValues,
+				pointEventMinOrderAmount,
 				adminMemo: detail.adminMemo || ''
 			});
 			setModalVisible(true);
@@ -441,23 +650,15 @@ const EventManagement = () => {
 
 			setSaving(true);
 
-			const finalEventStartAt = eventUseTime
-				? combineDateAndTime(values.customerEventStartAt, values.eventStartTime)
-				: toStartOfDay(values.customerEventStartAt);
-			const finalEventEndAt = eventUseTime
-				? combineDateAndTime(values.customerEventEndAt, values.eventEndTime)
-				: toEndOfDay(values.customerEventEndAt);
+			const finalEventStartAt = toStartOfDay(values.customerEventStartAt);
+			const finalEventEndAt = toEndOfDay(values.customerEventEndAt);
 
 			const enabledParticipation = values.eventMode === 'PARTNER_PARTICIPATION';
 			const finalParticipationStartAt = enabledParticipation
-				? participationUseTime
-					? combineDateAndTime(values.partnerApplyStartAt, values.partnerApplyStartTime)
-					: toStartOfDay(values.partnerApplyStartAt)
+				? toStartOfDay(values.partnerApplyStartAt)
 				: null;
 			const finalParticipationEndAt = enabledParticipation
-				? participationUseTime
-					? combineDateAndTime(values.partnerApplyEndAt, values.partnerApplyEndTime)
-					: toEndOfDay(values.partnerApplyEndAt)
+				? toEndOfDay(values.partnerApplyEndAt)
 				: null;
 
 			const payload = {
@@ -468,6 +669,9 @@ const EventManagement = () => {
 				// LocalDateTime API에 맞춰 timezone 없는 문자열로 전송
 				customerEventStartAt: finalEventStartAt?.format('YYYY-MM-DDTHH:mm:ss'),
 				customerEventEndAt: finalEventEndAt?.format('YYYY-MM-DDTHH:mm:ss'),
+				customerExposeAt: values.customerExposeAt
+					? dayjs(values.customerExposeAt).second(0).millisecond(0).format('YYYY-MM-DDTHH:mm:ss')
+					: null,
 				partnerApplyEnabled: enabledParticipation,
 				partnerApplyStartAt: finalParticipationStartAt?.format('YYYY-MM-DDTHH:mm:ss'),
 				partnerApplyEndAt: finalParticipationEndAt?.format('YYYY-MM-DDTHH:mm:ss'),
@@ -512,52 +716,6 @@ const EventManagement = () => {
 		}
 	};
 
-	const columns = [
-		{
-			title: '번호',
-			dataIndex: 'eventNo',
-			key: 'eventNo',
-			width: 80,
-			align: 'center',
-			sorter: (a, b) => a.eventNo - b.eventNo
-		},
-		{
-			title: '이벤트명',
-			dataIndex: 'eventTitle',
-			key: 'eventTitle',
-			ellipsis: true
-		},
-		{
-			title: '상태',
-			dataIndex: 'eventStatus',
-			key: 'eventStatus',
-			width: 140,
-			render: (status) => <Tag color="blue">{STATUS_LABELS[status] || status}</Tag>
-		},
-		{
-			title: '이벤트 기간',
-			key: 'eventPeriod',
-			width: 300,
-			render: (_, record) =>
-					`${formatDateTimeForList(record.customerEventStartAt)} ~ ${formatDateTimeForList(record.customerEventEndAt)}`
-		},
-		{
-			title: '작업',
-			key: 'action',
-			width: 120,
-			render: (_, record) => (
-				<Space>
-					<Button type="link" icon={<EditOutlined />} onClick={() => openEditModal(record.eventNo)}>
-						수정
-					</Button>
-					<Button type="link" onClick={() => openPerformance(record.eventNo)}>
-						실적
-					</Button>
-				</Space>
-			)
-		}
-	];
-
 	const getPointTargetSelectOptions = () => {
 		switch (pointEventTargetType) {
 			case 'PARTNER':
@@ -578,36 +736,32 @@ const EventManagement = () => {
 			<Tabs activeKey={activeTab} onChange={setActiveTab} items={[
 				{
 					key: 'manage',
-					label: '이벤트 관리',
+					label: '이벤트 운영 목록',
 					children: (
 			<>
 			<Card
-				title={null}
 				extra={
-					<Space>
-						<Space size={6}>
-							<Button type={statusFilter === undefined ? 'primary' : 'default'} onClick={() => handleStatusToggle(undefined)}>
-								전체
-							</Button>
-							{EVENT_STATUSES.map((status) => (
-								<Button
-									key={status}
-									type={statusFilter === status ? 'primary' : 'default'}
-									onClick={() => handleStatusToggle(status)}
-								>
-									{STATUS_LABELS[status] || status}
-								</Button>
-							))}
-						</Space>
-						<Input
+					<Space wrap>
+						<Select
+							value={statusFilter || ''}
+							options={STATUS_OPTIONS}
+							onChange={(value) => handleStatusToggle(value || undefined)}
+							style={{ width: 140 }}
+						/>
+						<Input.Search
+							allowClear
 							placeholder="이벤트명 검색"
 							style={{ width: 220 }}
 							value={keywordFilter}
 							onChange={(e) => setKeywordFilter(e.target.value)}
-							onPressEnter={() => { setCurrentPage(1); fetchEvents(); }}
+							onSearch={() => fetchEvents()}
 						/>
-						<Button icon={<ReloadOutlined />} onClick={() => { setCurrentPage(1); fetchEvents(); }} loading={loading}>
-							조회
+						<Radio.Group value={eventView} onChange={(e) => setEventView(e.target.value)}>
+							<Radio.Button value={VIEW_GRID}><AppstoreOutlined /></Radio.Button>
+							<Radio.Button value={VIEW_LIST}><UnorderedListOutlined /></Radio.Button>
+						</Radio.Group>
+						<Button icon={<ReloadOutlined />} onClick={() => fetchEvents()} loading={loading}>
+							새로고침
 						</Button>
 						<Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
 							이벤트 추가
@@ -615,27 +769,38 @@ const EventManagement = () => {
 					</Space>
 				}
 			>
-				<div style={{ marginBottom: 8, color: '#666' }}>
-					{`총 ${totalItems}건 • 페이지 ${currentPage}/${Math.max(1, Math.ceil(totalItems / pageSize))}`}
-				</div>
-				<Table
-					columns={columns}
-					dataSource={events}
-					rowKey="eventNo"
-					loading={loading}
-					size="small"
-					pagination={{
-						current: currentPage,
-						pageSize: pageSize,
-						total: totalItems,
-						showSizeChanger: true,
-						showTotal: (total) => `총 ${total}개`,
-						onChange: (p, s) => {
-							setCurrentPage(p);
-							setPageSize(s);
-						}
-					}}
-				/>
+				<Row gutter={16} className="mb-4">
+					<Col xs={12} md={6}><Card size="small"><Text type="secondary">전체</Text><h3 className="mb-0">{eventSummary.total}</h3></Card></Col>
+					<Col xs={12} md={6}><Card size="small"><Text type="secondary">비공개</Text><h3 className="mb-0">{eventSummary.PRIVATE}</h3></Card></Col>
+					<Col xs={12} md={6}><Card size="small"><Text type="secondary">공개</Text><h3 className="mb-0">{eventSummary.PUBLISHED}</h3></Card></Col>
+					<Col xs={12} md={6}><Card size="small"><Text type="secondary">종료</Text><h3 className="mb-0">{eventSummary.ENDED}</h3></Card></Col>
+				</Row>
+				<Spin spinning={loading}>
+					{events.length === 0 ? (
+						<Card><Empty description="표시할 이벤트가 없습니다." /></Card>
+					) : eventView === VIEW_LIST ? (
+						events.map(event => (
+							<EventOperationListItem
+								event={event}
+								onEdit={openEditModal}
+								onPerformance={openPerformance}
+								key={event.eventNo}
+							/>
+						))
+					) : (
+						<Row gutter={16}>
+							{events.map(event => (
+								<Col xs={24} sm={24} lg={12} xl={8} xxl={6} key={event.eventNo}>
+									<EventOperationGridItem
+										event={event}
+										onEdit={openEditModal}
+										onPerformance={openPerformance}
+									/>
+								</Col>
+							))}
+						</Row>
+					)}
+				</Spin>
 			</Card>
 
 			<Modal
@@ -703,32 +868,62 @@ const EventManagement = () => {
 					form={form}
 					layout="vertical"
 					disabled={editingEvent?.eventStatus === 'ENDED'}
-					initialValues={{ eventUseTime: false, participationUseTime: false }}
 				>
 					<Form.Item
-						name="eventTitle"
-						label="이벤트명"
-						rules={[{ required: true, message: '이벤트명을 입력해주세요.' }]}
+						name="eventMode"
+						label="참여 형태"
+						rules={[{ required: true, message: '참여 형태를 선택해주세요.' }]}
 					>
-						<Input placeholder="이벤트명을 입력하세요" />
+						<Radio.Group
+							options={EVENT_MODE_OPTIONS}
+							onChange={(e) => {
+								const nextMode = e.target.value;
+								const curType = form.getFieldValue('eventType');
+								const allowed = EVENT_TYPES_BY_MODE[nextMode] || [];
+								const nextType =
+									curType && allowed.includes(curType)
+										? curType
+										: getDefaultEventTypeForMode(nextMode);
+								const updates = { eventType: nextType };
+								if (nextType === 'POINT' && nextMode === 'PARTNER_PARTICIPATION') {
+									const allowedPt = getPointTargetTypeOptionsForMode(nextMode).map((o) => o.value);
+									const curPt = form.getFieldValue('pointEventTargetType');
+									if (!curPt || !allowedPt.includes(curPt)) {
+										updates.pointEventTargetType = 'ALL';
+										updates.pointEventTargetValues = [];
+										updates.pointEventMinOrderAmount = null;
+									}
+								}
+								form.setFieldsValue(updates);
+							}}
+						/>
 					</Form.Item>
 
-					<Form.Item
-						name="eventContent"
-						label="이벤트 내용"
-						rules={[{ required: true, message: '이벤트 내용을 입력해주세요.' }]}
-					>
-						<TextArea rows={5} placeholder="이벤트 내용을 입력하세요" />
-					</Form.Item>
-
-					<Space style={{ width: '100%' }} size={16} align="start">
+					<Space style={{ width: '100%' }} size={16} align="start" wrap>
 						<Form.Item
-							name="eventMode"
-							label="이벤트 모드"
-							rules={[{ required: true, message: '이벤트 모드를 선택해주세요.' }]}
-							style={{ width: 200 }}
+							name="eventType"
+							label="이벤트 종류"
+							rules={[{ required: true, message: '이벤트 종류를 선택해주세요.' }]}
+							style={{ minWidth: 220 }}
 						>
-							<Select options={EVENT_MODE_OPTIONS} />
+							<Select
+								placeholder="이벤트 종류 선택"
+								options={getEventTypeOptionsForMode(eventMode || 'ADMIN_ONLY')}
+								onChange={(v) => {
+									const mode = form.getFieldValue('eventMode') || 'ADMIN_ONLY';
+									if (v === 'POINT' && mode === 'PARTNER_PARTICIPATION') {
+										const allowedPt = getPointTargetTypeOptionsForMode('PARTNER_PARTICIPATION').map((o) => o.value);
+										const curPt = form.getFieldValue('pointEventTargetType');
+										if (!curPt || !allowedPt.includes(curPt)) {
+											form.setFieldsValue({
+												pointEventTargetType: 'ALL',
+												pointEventTargetValues: [],
+												pointEventMinOrderAmount: null
+											});
+										}
+									}
+								}}
+							/>
 						</Form.Item>
 
 						<Form.Item
@@ -745,27 +940,30 @@ const EventManagement = () => {
 								}))}
 							/>
 						</Form.Item>
-
-						<Form.Item
-							name="eventType"
-							label="이벤트 타입"
-							style={{ width: 200 }}
-						>
-							<Select
-								allowClear
-								placeholder="이벤트 타입 선택"
-								options={EVENT_TYPE_OPTIONS}
-							/>
-						</Form.Item>
-
 					</Space>
+
+					<Form.Item
+						name="eventTitle"
+						label="이벤트명"
+						rules={[{ required: true, message: '이벤트명을 입력해주세요.' }]}
+					>
+						<Input placeholder="이벤트명을 입력하세요" />
+					</Form.Item>
+
+					<Form.Item
+						name="eventContent"
+						label="이벤트 내용"
+						rules={[{ required: true, message: '이벤트 내용을 입력해주세요.' }]}
+					>
+						<TextArea rows={5} placeholder="이벤트 내용을 입력하세요" />
+					</Form.Item>
 
 					{(eventType === 'SALE' || eventType === 'POINT') && (
 						<Space style={{ width: '100%' }} size={16} align="start">
 							<Form.Item
 								name="saleDiscountType"
-								label={eventType === 'POINT' ? '추가 포인트 지급 타입' : '세일 할인 타입'}
-								rules={[{ required: true, message: '할인 타입을 선택해주세요.' }]}
+								label={eventType === 'POINT' ? '추가 포인트 지급 종류' : '세일 종류'}
+								rules={[{ required: true, message: '종류를 선택해주세요.' }]}
 								style={{ width: 240 }}
 							>
 								<Select options={SALE_DISCOUNT_TYPE_OPTIONS} />
@@ -773,7 +971,7 @@ const EventManagement = () => {
 
 							<Form.Item
 								name="saleDiscountValue"
-								label={eventType === 'POINT' ? '추가 포인트 지급 값' : '세일 할인 값'}
+								label={eventType === 'POINT' ? '추가 포인트 지급 값' : '세일 값'}
 								rules={[{ required: true, message: '할인 값을 입력해주세요.' }]}
 								style={{ width: 240 }}
 							>
@@ -795,35 +993,17 @@ const EventManagement = () => {
 					{eventType === 'POINT' && (
 						<>
 							<div style={{ marginBottom: 16, padding: 12, background: '#f6f8fa', borderRadius: 6, color: '#555' }}>
-								현재 정책: POINT 이벤트 추가 포인트는 동일 이벤트 기준 고객 1인당 최대 3회 지급(고정)
+								포인트는 동일 이벤트 기준 고객 1인당 최대 3회 지급
 							</div>
-							{pointEventTargetType && (
-								<div style={{ marginBottom: 12, padding: 10, background: '#fafbfc', borderRadius: 6, color: '#666' }}>
-									{/* 대상 상세 미리보기 */}
-									{pointEventTargetType === 'ALL' && <div>대상: 전체(ALL)</div>}
-									{pointEventTargetType === 'PRODUCT' && (
-										<div>선택 대상: 상품 #{(form.getFieldValue('pointEventTargetValues') || []).slice(0, 5).join(', #')}{(form.getFieldValue('pointEventTargetValues') || []).length > 5 ? ' …' : ''}</div>
-									)}
-									{pointEventTargetType === 'OPTION' && (
-										<div>선택 대상: 옵션 #{(form.getFieldValue('pointEventTargetValues') || []).slice(0, 5).join(', #')}{(form.getFieldValue('pointEventTargetValues') || []).length > 5 ? ' …' : ''}</div>
-									)}
-									{pointEventTargetType === 'CATEGORY' && (
-										<div>선택 대상: {(form.getFieldValue('pointEventTargetValues') || []).slice(0, 5).join(', ')}{(form.getFieldValue('pointEventTargetValues') || []).length > 5 ? ' …' : ''}</div>
-									)}
-									{pointEventTargetType === 'MIN_ORDER_AMOUNT' && (
-										<div>최소 주문금액: {(form.getFieldValue('pointEventMinOrderAmount') || 0).toLocaleString()}원 이상</div>
-									)}
-								</div>
-							)}
 							<Space style={{ width: '100%' }} size={16} align="start">
 								<Form.Item
 									name="pointEventTargetType"
-									label="포인트 대상 타입"
-									rules={[{ required: true, message: '포인트 대상 타입을 선택해주세요.' }]}
+									label="포인트 대상 종류"
+									rules={[{ required: true, message: '포인트 대상 종류를 선택해주세요.' }]}
 									style={{ width: 280 }}
 								>
 									<Select
-										options={POINT_TARGET_TYPE_OPTIONS}
+										options={getPointTargetTypeOptionsForMode(eventMode || 'ADMIN_ONLY')}
 										onChange={() => {
 											form.setFieldsValue({
 												pointEventTargetValues: [],
@@ -860,10 +1040,18 @@ const EventManagement = () => {
 											placeholder="대상을 선택하세요"
 											options={getPointTargetSelectOptions()}
 											optionFilterProp="label"
+											maxTagCount="responsive"
+											maxTagPlaceholder={(omittedValues) => `외 ${omittedValues.length}개`}
 										/>
 									</Form.Item>
 								)}
 						</>
+					)}
+
+					{eventType === 'NOTICE' && (
+						<div style={{ marginBottom: 16, padding: 12, background: '#fffbe6', borderRadius: 6, color: '#555' }}>
+							공지형 이벤트는 제목·내용·기간만 노출됩니다.
+						</div>
 					)}
 
 					{eventType === 'SALE' && (
@@ -875,7 +1063,7 @@ const EventManagement = () => {
 					<Space style={{ width: '100%' }} size={16} align="start">
 						<Form.Item
 							name="customerEventStartAt"
-							label="고객 이벤트 시작일"
+							label="혜택 적용 시작일"
 							rules={[{ required: true, message: '이벤트 시작일을 선택해주세요.' }]}
 							style={{ width: 260 }}
 						>
@@ -883,7 +1071,7 @@ const EventManagement = () => {
 						</Form.Item>
 						<Form.Item
 							name="customerEventEndAt"
-							label="고객 이벤트 종료일"
+							label="혜택 적용 종료일"
 							rules={[{ required: true, message: '이벤트 종료일을 선택해주세요.' }]}
 							style={{ width: 260 }}
 						>
@@ -891,40 +1079,13 @@ const EventManagement = () => {
 						</Form.Item>
 					</Space>
 
-					<Form.Item name="eventUseTime" label="시간 포함" valuePropName="checked">
-						<Switch
-							onChange={(checked) => {
-								// 시간 미사용일 때는 이전 선택값을 정리해두면 UX가 깔끔합니다.
-								if (!checked) {
-									form.setFieldsValue({
-										eventStartTime: null,
-										eventEndTime: null
-									});
-								}
-							}}
-						/>
+					<Form.Item
+						name="customerExposeAt"
+						label="사이트 공개 시작일"
+						tooltip="시각이 지나면 고객 사이트에에 노출됩니다."
+					>
+						<DatePicker showTime format="YYYY-MM-DD HH:mm" style={{ width: '100%', maxWidth: 280 }} allowClear placeholder="선택 안 함 (고객 비공개)" />
 					</Form.Item>
-
-					{eventUseTime && (
-						<Space style={{ width: '100%' }} size={16} align="start">
-							<Form.Item
-								name="eventStartTime"
-								label="이벤트 시작 시간"
-								rules={[{ required: true, message: '이벤트 시작 시간을 선택해주세요.' }]}
-								style={{ width: 260 }}
-							>
-								<TimePicker format="HH:mm" style={{ width: '100%' }} />
-							</Form.Item>
-							<Form.Item
-								name="eventEndTime"
-								label="이벤트 종료 시간"
-								rules={[{ required: true, message: '이벤트 종료 시간을 선택해주세요.' }]}
-								style={{ width: 260 }}
-							>
-								<TimePicker format="HH:mm" style={{ width: '100%' }} />
-							</Form.Item>
-						</Space>
-					)}
 
 					{eventMode === 'PARTNER_PARTICIPATION' && (
 						<Space style={{ width: '100%' }} size={16} align="start">
@@ -947,44 +1108,40 @@ const EventManagement = () => {
 						</Space>
 					)}
 
-					{eventMode === 'PARTNER_PARTICIPATION' && (
-						<Form.Item name="participationUseTime" label="파트너 신청 시간 포함" valuePropName="checked">
-							<Switch
-								onChange={(checked) => {
-									if (!checked) {
-										form.setFieldsValue({
-											partnerApplyStartTime: null,
-											partnerApplyEndTime: null
-										});
-									}
-								}}
-							/>
-						</Form.Item>
-					)}
-
-					{eventMode === 'PARTNER_PARTICIPATION' && participationUseTime && (
-						<Space style={{ width: '100%' }} size={16} align="start">
-							<Form.Item
-								name="partnerApplyStartTime"
-								label="파트너 신청 시작 시간"
-								rules={[{ required: true, message: '파트너 신청 시작 시간을 선택해주세요.' }]}
-								style={{ width: 260 }}
-							>
-								<TimePicker format="HH:mm" style={{ width: '100%' }} />
-							</Form.Item>
-							<Form.Item
-								name="partnerApplyEndTime"
-								label="파트너 신청 종료 시간"
-								rules={[{ required: true, message: '파트너 신청 종료 시간을 선택해주세요.' }]}
-								style={{ width: 260 }}
-							>
-								<TimePicker format="HH:mm" style={{ width: '100%' }} />
-							</Form.Item>
+					<Form.Item name="thumbnailUrl" label="썸네일 이미지">
+						<Input type="hidden" />
+					</Form.Item>
+					<Form.Item label="썸네일 업로드">
+						<Space align="start" wrap>
+							{thumbnailUrl && (
+								<img
+									src={thumbnailUrl}
+									alt="이벤트 썸네일 미리보기"
+									style={{ width: 120, height: 80, objectFit: 'cover', borderRadius: 6, border: '1px solid #f0f0f0' }}
+								/>
+							)}
+							<Space direction="vertical">
+								<Upload
+									maxCount={1}
+									beforeUpload={beforeUploadImage}
+									customRequest={handleUploadThumbnail}
+									showUploadList={false}
+								>
+									<Button icon={<UploadOutlined />} loading={saving}>
+										이미지 업로드
+									</Button>
+								</Upload>
+								{thumbnailUrl && (
+									<Button
+										icon={<DeleteOutlined />}
+										onClick={() => form.setFieldsValue({ thumbnailUrl: '' })}
+									>
+										이미지 제거
+									</Button>
+								)}
+								<Text type="secondary">jpg, png, gif, webp / 10MB 이하</Text>
+							</Space>
 						</Space>
-					)}
-
-					<Form.Item name="thumbnailUrl" label="썸네일 URL">
-						<Input placeholder="https://..." />
 					</Form.Item>
 
 					<Form.Item name="adminMemo" label="관리자 메모">
@@ -1052,7 +1209,7 @@ const EventManagement = () => {
 			)},
 				{
 					key: 'endedPerformance',
-					label: '이벤트 실적(종료)',
+					label: '이벤트 실적',
 					children: (
 						<Card
 							title={null}
@@ -1112,9 +1269,6 @@ const EventManagement = () => {
 												}),
 												{ totalOrders: 0, totalOrderItems: 0, totalNetAmount: 0, adminRewardPoint: 0, partnerRewardPoint: 0 }
 										  );
-									const rewardSum = totals.adminRewardPoint + totals.partnerRewardPoint;
-									const adminPct = rewardSum > 0 ? Math.round((totals.adminRewardPoint / rewardSum) * 100) : 0;
-									const partnerPct = rewardSum > 0 ? 100 - adminPct : 0;
 									return (
 										<>
 											{/* 상단: 일자별 추이 + Top N 파트너 먼저 배치 */}
@@ -1226,13 +1380,13 @@ const EventManagement = () => {
 											</Row>
 											<Row gutter={[16, 16]} style={{ marginTop: 8 }}>
 												<Col xs={24} md={12}>
-													<Card size="small" title="이벤트 유형별 비율(관리자 단독/파트너 참여형)">
+													<Card size="small" title="이벤트 유형별 비율(운영 직접 등록 / 파트너 신청·등록)">
 														<Chart
 															type="donut"
 															height={260}
 															series={[totals.adminRewardPoint || 0, totals.partnerRewardPoint || 0]}
 															options={{
-																labels: ['관리자 단독 이벤트', '파트너 참여형 이벤트'],
+																labels: ['운영 직접 등록', '파트너 신청·등록'],
 																dataLabels: { enabled: true },
 																legend: { position: 'bottom' }
 															}}
@@ -1278,12 +1432,12 @@ const EventManagement = () => {
 										render: (_, r) => {
 											const adminAmt = r.adminRewardPoint || 0;
 											const partnerAmt = r.partnerRewardPoint || 0;
-											// 파트너 보상이 있으면 참여형으로 간주, 아니면 관리자 단독
+											// 파트너 보상이 있으면 파트너 신청·등록으로 간주
 											const isPartner = partnerAmt > 0;
 											return (
 												<Space size={6}>
 													<Tag color={isPartner ? 'blue' : 'default'}>
-														{isPartner ? '파트너 참여형 이벤트' : '관리자 단독 이벤트'}
+														{isPartner ? '파트너 신청·등록' : '운영 직접 등록'}
 													</Tag>
 													<span style={{ color: '#555' }}>
 														{(isPartner ? partnerAmt : adminAmt).toLocaleString()} P

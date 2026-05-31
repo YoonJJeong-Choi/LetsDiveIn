@@ -22,10 +22,12 @@ import com.swimshop.swim_mall.common.error.ErrorCode;
 import com.swimshop.swim_mall.customer.entity.CustomerEntity;
 import com.swimshop.swim_mall.customer.reopository.CustomerRepository;
 import com.swimshop.swim_mall.inventory.service.InventoryService;
+import com.swimshop.swim_mall.order.entity.OrderEntity;
 import com.swimshop.swim_mall.option.entity.OptionEntity;
 import com.swimshop.swim_mall.option.repository.OptionRepository;
 import com.swimshop.swim_mall.product.entity.ProductEntity;
 import com.swimshop.swim_mall.product.repository.ProductRepository;
+import com.swimshop.swim_mall.product.service.ProductCustomerImageUrlResolver;
 
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +44,7 @@ public class CartService {
     private final OptionRepository optionRepository;
     private final AuthService authService;
     private final InventoryService inventoryService;
+    private final ProductCustomerImageUrlResolver productCustomerImageUrlResolver;
 
     /**
      * 고객의 장바구니 조회 (없으면 생성)
@@ -98,7 +101,7 @@ public class CartService {
                     item.getCartItemNo(),
                     item.getProduct().getProductNo(),
                     item.getProduct().getProductName(),
-                    item.getProduct().getProductImageUrl(),
+                    productCustomerImageUrlResolver.resolveDisplayUrlOrEmpty(item.getProduct()),
                     item.getOption() != null ? item.getOption().getOptionNo() : null,
                     item.getOption() != null ? item.getOption().getColor() : null,
                     item.getOption() != null ? item.getOption().getSize() : null,
@@ -325,6 +328,36 @@ public class CartService {
         }
         
         cartItemRepository.delete(item);
+    }
+
+    /**
+     * 주문에 담긴 상품·옵션과 일치하는 장바구니 라인만 제거 (결제 승인 후).
+     */
+    @Transactional
+    public void removeOrderedLinesFromCart(OrderEntity order) {
+        var cartOpt = cartRepository.findByCustomer(order.getCustomer());
+        if (cartOpt.isEmpty()) {
+            return;
+        }
+        var cart = cartOpt.get();
+        var cartItems = cartItemRepository.findByCart(cart);
+        var orderItems = order.getOrderItems();
+        var toDelete = new ArrayList<CartItemEntity>();
+        for (var ci : cartItems) {
+            boolean matches = orderItems.stream().anyMatch(oi -> {
+                Long oiProd = oi.getProduct() != null ? oi.getProduct().getProductNo() : null;
+                Long oiOpt = oi.getOption() != null ? oi.getOption().getOptionNo() : null;
+                Long ciProd = ci.getProduct() != null ? ci.getProduct().getProductNo() : null;
+                Long ciOpt = ci.getOption() != null ? ci.getOption().getOptionNo() : null;
+                return java.util.Objects.equals(oiProd, ciProd) && java.util.Objects.equals(oiOpt, ciOpt);
+            });
+            if (matches) {
+                toDelete.add(ci);
+            }
+        }
+        if (!toDelete.isEmpty()) {
+            cartItemRepository.deleteAll(toDelete);
+        }
     }
     
     private static Long toLong(Object value) {

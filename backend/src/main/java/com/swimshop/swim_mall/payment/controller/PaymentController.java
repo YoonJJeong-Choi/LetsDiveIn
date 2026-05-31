@@ -32,9 +32,9 @@ public class PaymentController {
 
 	private final com.swimshop.swim_mall.order.repository.OrderRepository orderRepository;
 	private final com.swimshop.swim_mall.payment.PaymentRepository paymentRepository;
-	private final com.swimshop.swim_mall.cart.repository.CartRepository cartRepository;
-	private final com.swimshop.swim_mall.cart.repository.CartItemRepository cartItemRepository;
 	private final com.swimshop.swim_mall.payment.repository.WebhookLogRepository webhookLogRepository;
+	private final com.swimshop.swim_mall.payment.service.TossPaymentsConfirmService tossPaymentsConfirmService;
+	private final com.swimshop.swim_mall.cart.service.CartService cartService;
 
 	/**
 	 * 결제 요청 생성 (스켈레톤)
@@ -56,109 +56,49 @@ public class PaymentController {
 	@PostMapping("/confirm")
 	public ResponseEntity<ApiResponse<Map<String, Object>>> confirm(@RequestBody Map<String, Object> payload) {
 		System.out.println("[Payments] confirm request => " + payload);
-		// 간단 승인 플로우 (샌드박스): orderId로 주문 조회 → 금액 검증 → PAID 전이 → 장바구니 정리
-		Map<String, Object> body = new HashMap<>();
 		try {
-			String orderId = String.valueOf(payload.get("orderId"));
+			String orderIdStr = payload.get("orderId") != null ? String.valueOf(payload.get("orderId")) : "";
 			String paymentKey = payload.get("paymentKey") != null ? String.valueOf(payload.get("paymentKey")) : null;
 			Number amt = payload.get("amount") instanceof Number ? (Number) payload.get("amount") : null;
-			if (orderId == null || orderId.isBlank() || amt == null) {
+			if (orderIdStr.isBlank() || amt == null) {
 				return ResponseEntity.badRequest().body(ApiResponse.fail(ErrorCode.INVALID_REQUEST, "orderId/amount 누락"));
 			}
 			Long amount = amt.longValue();
 
-			// orderId 형식: ORD-{orderNo}-{ts}
-			Long orderNo = null;
-			try {
-				String[] parts = orderId.split("-");
-				if (parts.length >= 2) {
-					orderNo = Long.valueOf(parts[1]);
-				}
-			} catch (Exception ignore) {}
+			Long orderNo = parseOrderNoFromWidgetOrderId(orderIdStr);
 			if (orderNo == null) {
 				return ResponseEntity.badRequest().body(ApiResponse.fail(ErrorCode.INVALID_REQUEST, "orderId 형식 오류"));
 			}
 
-			// 주문 조회
-			com.swimshop.swim_mall.order.entity.OrderEntity order =
-					orderRepository.findByOrderNo(orderNo).orElse(null);
-			if (order == null) {
-				return ResponseEntity.badRequest().body(ApiResponse.fail(ErrorCode.ORDER_NOT_FOUND, "주문을 찾을 수 없습니다."));
-			}
-
-			// 금액 검증
-			if (!java.util.Objects.equals(order.getOrderTotalPrice(), amount)) {
-				return ResponseEntity.badRequest().body(ApiResponse.fail(ErrorCode.INVALID_REQUEST, "금액 불일치"));
-			}
-
-			// 멱등 처리: 이미 결제 정보가 있고 paidAt이 있으면 그대로 성공 반환
-			com.swimshop.swim_mall.payment.PaymentEntity existing = order.getPayment();
-			if (existing != null && existing.getPaidAt() != null) {
-				body.put("approved", true);
-				body.put("orderNo", orderNo);
-				return ResponseEntity.ok(ApiResponse.success(body));
-			}
-
-			// Payment 생성 또는 기존 결제 갱신 후 주문 상태 전이
-			if (existing != null) {
-				// 기존 결제 레코드를 결제 완료로 갱신 (amount/method/paidAt 업데이트)
-				existing.markPaid(amount, order.getPaymentMethod(), java.time.LocalDateTime.now());
-				// FK 소유자는 Payment이므로, 링크가 없다면 연결
-				if (existing.getOrder() == null) {
-					existing.setOrder(order);
-				}
-				paymentRepository.save(existing);
-			} else {
-				// 신규 결제 생성
-			com.swimshop.swim_mall.payment.PaymentEntity payment = com.swimshop.swim_mall.payment.PaymentEntity.builder()
-					.paymentAmount(amount)
-					.paymentMethod(order.getPaymentMethod())
-					.provider("toss")
-					.paymentKey(paymentKey)
-					.pgOrderId(orderId)
-					.status(com.swimshop.swim_mall.payment.enums.PaymentStatus.PAID)
-					.paidAt(java.time.LocalDateTime.now())
-					.rawApprovePayload(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(payload))
-					.build();
-				// FK 소유자는 Payment
-				payment.setOrder(order);
-				payment = paymentRepository.save(payment);
-			}
-
-			// 주문 상태 전이
-			order.updateStatus(com.swimshop.swim_mall.common.enums.OrderStatus.PAID);
-			orderRepository.save(order);
-
-			// 장바구니 정리: 고객 장바구니에서 주문 상품과 일치하는 항목 제거
-			var cartOpt = cartRepository.findByCustomer(order.getCustomer());
-			if (cartOpt.isPresent()) {
-				var cart = cartOpt.get();
-				var cartItems = cartItemRepository.findByCart(cart);
-				// 주문 아이템 기준으로 매칭 삭제
-				var orderItems = order.getOrderItems();
-				var toDelete = new java.util.ArrayList<com.swimshop.swim_mall.cart.entity.CartItemEntity>();
-				for (var ci : cartItems) {
-					boolean matches = orderItems.stream().anyMatch(oi -> {
-						Long oiProd = oi.getProduct() != null ? oi.getProduct().getProductNo() : null;
-						Long oiOpt = oi.getOption() != null ? oi.getOption().getOptionNo() : null;
-						Long ciProd = ci.getProduct() != null ? ci.getProduct().getProductNo() : null;
-						Long ciOpt = ci.getOption() != null ? ci.getOption().getOptionNo() : null;
-						return java.util.Objects.equals(oiProd, ciProd) && java.util.Objects.equals(oiOpt, ciOpt);
-					});
-					if (matches) toDelete.add(ci);
-				}
-				if (!toDelete.isEmpty()) {
-					cartItemRepository.deleteAll(toDelete);
-				}
-			}
-
-			body.put("approved", true);
-			body.put("orderNo", orderNo);
-			return ResponseEntity.ok(ApiResponse.success(body));
+			Map<String, Object> result = tossPaymentsConfirmService.confirmAndPersist(orderNo, paymentKey, orderIdStr, amount);
+			return ResponseEntity.ok(ApiResponse.success(result));
 		} catch (Exception e) {
 			e.printStackTrace();
 			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
 					.body(ApiResponse.fail(ErrorCode.INTERNAL_SERVER_ERROR, "승인 처리 중 오류가 발생했습니다."));
+		}
+	}
+
+	/** 위젯 orderId: {@code ORD-{orderNo}-...} 또는 숫자 문자열 */
+	private static Long parseOrderNoFromWidgetOrderId(String orderIdStr) {
+		if (orderIdStr == null || orderIdStr.isBlank()) {
+			return null;
+		}
+		if (orderIdStr.contains("-")) {
+			try {
+				String[] parts = orderIdStr.split("-");
+				if (parts.length >= 2) {
+					return Long.valueOf(parts[1]);
+				}
+			} catch (NumberFormatException e) {
+				return null;
+			}
+			return null;
+		}
+		try {
+			return Long.parseLong(orderIdStr.trim());
+		} catch (NumberFormatException e) {
+			return null;
 		}
 	}
 
@@ -261,6 +201,8 @@ public class PaymentController {
 							order.updateStatus(com.swimshop.swim_mall.common.enums.OrderStatus.PAID);
 							orderRepository.save(order);
 						}
+						// confirm API가 실패하거나 누락돼도, 승인 이벤트가 오면 장바구니를 정리합니다.
+						cartService.removeOrderedLinesFromCart(order);
 					}
 				}
 			} else if ("PAYMENT_CANCELED".equalsIgnoreCase(type)) {
@@ -434,6 +376,7 @@ public class PaymentController {
 		}
 		return sb.toString();
 	}
+
 }
 
 

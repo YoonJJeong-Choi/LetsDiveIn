@@ -15,6 +15,8 @@ public class ProductOptionDto {
     private String size; // 사이즈
     private Long optionAddPrice; // 추가 가격 (null이면 기본 가격)
     private Long totalPrice; // 총 가격 (기본 가격 + 추가 가격)
+    private Long salePrice; // 세일 적용가 (없으면 null)
+    private Integer salePercent; // 세일율 (없으면 null)
     private ActiveStatus optionStatus; // 옵션 상태 (관리자용: ACTIVE, INACTIVE, PENDING_UPDATE, REJECTED)
     
     // 재고 정보 (고객용/관리자용)
@@ -23,26 +25,67 @@ public class ProductOptionDto {
     
     // 고객용 생성자 (상태 없음, 재고 정보 없음)
     public ProductOptionDto(Long optionNo, String color, String size, Long optionAddPrice, Long totalPrice) {
-        this(optionNo, color, size, optionAddPrice, totalPrice, null, null, null);
+        this(optionNo, color, size, optionAddPrice, totalPrice, null, null, null, null, null);
+    }
+    
+    // 고객용 생성자 (상태 없음, 세일 정보 포함, 재고 정보 포함)
+    public ProductOptionDto(
+            Long optionNo,
+            String color,
+            String size,
+            Long optionAddPrice,
+            Long totalPrice,
+            Long salePrice,
+            Integer salePercent,
+            Integer stockQuantity,
+            Boolean inStock
+    ) {
+        this(optionNo, color, size, optionAddPrice, totalPrice, salePrice, salePercent, null, stockQuantity, inStock);
     }
     
     // 고객용 생성자 (상태 없음, 재고 정보 포함)
     public ProductOptionDto(Long optionNo, String color, String size, Long optionAddPrice, Long totalPrice, Integer stockQuantity, Boolean inStock) {
-        this(optionNo, color, size, optionAddPrice, totalPrice, null, stockQuantity, inStock);
+        this(optionNo, color, size, optionAddPrice, totalPrice, null, null, null, stockQuantity, inStock);
     }
     
     // 관리자용 생성자 (상태 포함, 재고 정보 없음)
     public ProductOptionDto(Long optionNo, String color, String size, Long optionAddPrice, Long totalPrice, ActiveStatus optionStatus) {
-        this(optionNo, color, size, optionAddPrice, totalPrice, optionStatus, null, null);
+        this(optionNo, color, size, optionAddPrice, totalPrice, null, null, optionStatus, null, null);
     }
     
     // 관리자용 생성자 (상태 및 재고 정보 포함)
-    public ProductOptionDto(Long optionNo, String color, String size, Long optionAddPrice, Long totalPrice, ActiveStatus optionStatus, Integer stockQuantity, Boolean inStock) {
+    public ProductOptionDto(
+            Long optionNo,
+            String color,
+            String size,
+            Long optionAddPrice,
+            Long totalPrice,
+            ActiveStatus optionStatus,
+            Integer stockQuantity,
+            Boolean inStock
+    ) {
+        this(optionNo, color, size, optionAddPrice, totalPrice, null, null, optionStatus, stockQuantity, inStock);
+    }
+
+    private ProductOptionDto(
+            Long optionNo,
+            String color,
+            String size,
+            Long optionAddPrice,
+            Long totalPrice,
+            Long salePrice,
+            Integer salePercent,
+            ActiveStatus optionStatus,
+            Integer stockQuantity,
+            Boolean inStock
+    ) {
         this.optionNo = optionNo;
         this.color = color;
         this.size = size;
         this.optionAddPrice = optionAddPrice;
         this.totalPrice = totalPrice;
+        this.salePrice = salePrice;
+        this.salePercent = salePercent;
         this.optionStatus = optionStatus;
         this.stockQuantity = stockQuantity;
         this.inStock = inStock;

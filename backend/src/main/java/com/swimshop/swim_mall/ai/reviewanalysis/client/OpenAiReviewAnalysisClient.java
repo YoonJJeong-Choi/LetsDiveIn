@@ -1,6 +1,7 @@
 package com.swimshop.swim_mall.ai.reviewanalysis.client;
 
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -16,6 +17,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.swimshop.swim_mall.ai.reviewanalysis.dto.ReviewAnalysisRequestDto;
 import com.swimshop.swim_mall.ai.reviewanalysis.service.ReviewAnalysisPromptTemplateService;
 
+import jakarta.annotation.PostConstruct;
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @Component
 public class OpenAiReviewAnalysisClient {
 
@@ -23,6 +28,7 @@ public class OpenAiReviewAnalysisClient {
     private final RestClient restClient;
     private final String apiKey;
     private final String model;
+    private final int maxOutputTokens;
     private final ReviewAnalysisPromptTemplateService promptTemplateService;
 
     public OpenAiReviewAnalysisClient(
@@ -30,11 +36,13 @@ public class OpenAiReviewAnalysisClient {
             ReviewAnalysisPromptTemplateService promptTemplateService,
             @Value("${ai.openai.api-key:}") String apiKey,
             @Value("${ai.openai.model:gpt-4o-mini}") String model,
-            @Value("${ai.openai.timeout-ms:5000}") int timeoutMs) {
+            @Value("${ai.openai.timeout-ms:60000}") int timeoutMs,
+            @Value("${ai.review-analysis.openai-max-output-tokens:4096}") int maxOutputTokens) {
         this.objectMapper = objectMapper;
         this.promptTemplateService = promptTemplateService;
         this.apiKey = apiKey;
         this.model = model;
+        this.maxOutputTokens = Math.max(256, maxOutputTokens);
 
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Duration.ofMillis(timeoutMs));
@@ -44,6 +52,15 @@ public class OpenAiReviewAnalysisClient {
                 .baseUrl("https://api.openai.com")
                 .requestFactory(requestFactory)
                 .build();
+    }
+
+    @PostConstruct
+    void logOpenAiReadiness() {
+        if (apiKey == null || apiKey.isBlank()) {
+            log.warn("OpenAI API 키가 비어 있습니다(ai.openai.api-key / OPENAI_API_KEY). 리뷰 AI 분석은 폴백 응답만 반환됩니다.");
+        } else {
+            log.info("OpenAI 리뷰 분석 클라이언트 준비됨(model={}, maxOutputTokens={}).", model, maxOutputTokens);
+        }
     }
 
     public String requestReviewAnalysisJson(ReviewAnalysisRequestDto requestDto) {
@@ -61,13 +78,14 @@ public class OpenAiReviewAnalysisClient {
         String systemPrompt = promptTemplateService.buildSystemPrompt(requestDto);
         String userPrompt = "Input JSON: " + inputJson;
 
-        Map<String, Object> payload = Map.of(
-                "model", model,
-                "temperature", 0,
-                "response_format", Map.of("type", "json_object"),
-                "messages", List.of(
-                        Map.of("role", "system", "content", systemPrompt),
-                        Map.of("role", "user", "content", userPrompt)));
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("model", model);
+        payload.put("temperature", 0);
+        payload.put("max_tokens", maxOutputTokens);
+        payload.put("response_format", Map.of("type", "json_object"));
+        payload.put("messages", List.of(
+                Map.of("role", "system", "content", systemPrompt),
+                Map.of("role", "user", "content", userPrompt)));
 
         JsonNode responseRoot = restClient.post()
                 .uri("/v1/chat/completions")

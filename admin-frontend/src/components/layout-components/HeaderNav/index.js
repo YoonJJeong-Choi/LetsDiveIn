@@ -1,15 +1,10 @@
 /** @jsxImportSource @emotion/react */
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { TEMPLATE } from 'constants/ThemeConstant';
-import { MenuFoldOutlined, MenuUnfoldOutlined, SearchOutlined } from '@ant-design/icons';
+import { MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons';
 import Logo from '../Logo';
-import NavNotification from '../NavNotification';
 import NavProfile from '../NavProfile';
-import NavLanguage from '../NavLanguage';
-import NavPanel from '../NavPanel';
-import NavSearch  from '../NavSearch';
-import SearchInput from '../NavSearch/SearchInput';
 import Header from './Header';
 import HeaderWrapper from './HeaderWrapper';
 import Nav from './Nav'
@@ -23,8 +18,6 @@ export const HeaderNav = props => {
 
 	const { isMobile } = props;
 
-	const [searchActive, setSearchActive] = useState(false);
-
 	const dispatch = useDispatch()
 
 	const navCollapsed = useSelector(state => state.theme.navCollapsed)
@@ -32,15 +25,6 @@ export const HeaderNav = props => {
 	const navType = useSelector(state => state.theme.navType)
 	const headerNavColor = useSelector(state => state.theme.headerNavColor)
 	const currentTheme = useSelector(state => state.theme.currentTheme)
-	const direction = useSelector(state => state.theme.direction)
-
-	const onSearchActive = () => {
-		setSearchActive(true)
-	}
-
-	const onSearchClose = () => {
-		setSearchActive(false)
-	}
 
 	const onToggle = () => {
 		if(!isMobile) {
@@ -73,12 +57,6 @@ export const HeaderNav = props => {
 		}
 	}
 
-	useEffect(() => {
-		if(!isMobile) {
-			onSearchClose();
-		}
-	})
-	
 	return (
 		<Header isDarkTheme={isDarkTheme} headerNavColor={headerNavColor || navBgColor}>
 			<HeaderWrapper isNavTop={isNavTop}>
@@ -94,29 +72,10 @@ export const HeaderNav = props => {
 								</NavItem>
 							)
 						}
-						{isMobile ?
-                            <div className="ant-menu-item ant-menu-item-only-child" onClick={() => {onSearchActive()}}>
-                                <SearchOutlined />
-                            </div>
-                            :
-                            <div className="ant-menu-item ant-menu-item-only-child" style={{cursor: 'auto'}}>
-                                <SearchInput mode={navMode} isMobile={isMobile} />
-                            </div>
-                        }
 					</NavEdge>
 					<NavEdge right>
-						<NavNotification mode={navMode} />
-						<NavLanguage mode={navMode} />
-						<NavPanel direction={direction} mode={navMode} />
 						<NavProfile mode={navMode} />
 					</NavEdge>
-					<NavSearch 
-						active={searchActive} 
-						close={onSearchClose} 
-						headerNavColor={headerNavColor}
-						currentTheme={currentTheme}
-						mode={navMode}
-					/>
 				</Nav>
 			</HeaderWrapper>
 		</Header>

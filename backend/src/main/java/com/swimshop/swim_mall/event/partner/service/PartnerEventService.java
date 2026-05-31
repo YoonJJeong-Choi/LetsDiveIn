@@ -326,7 +326,7 @@ public class PartnerEventService {
         return participationRepository.findSnapshotEligibleEventNosForPartnerAt(
                 partnerId,
                 at,
-                com.swimshop.swim_mall.common.enums.EventStatus.ACTIVE
+                com.swimshop.swim_mall.common.enums.EventStatus.PUBLISHED
         );
     }
 
@@ -341,7 +341,7 @@ public class PartnerEventService {
         return participationRepository.findEligibleEventsForPartnerAt(
                 partnerId,
                 completedAt,
-                com.swimshop.swim_mall.common.enums.EventStatus.ACTIVE
+                com.swimshop.swim_mall.common.enums.EventStatus.PUBLISHED
         );
     }
 

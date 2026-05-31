@@ -6,6 +6,7 @@ import ColorSelect from "../productDetails/ColorSelect";
 import Grid5 from "../productDetails/grids/Grid5";
 import { useContextElement } from "@/context/Context";
 import QuantitySelect from "../productDetails/QuantitySelect";
+import { formatKrw } from "@/lib/price/formatKrw";
 export default function QuickView() {
   const [activeColor, setActiveColor] = useState("gray");
   const [quantity, setQuantity] = useState(1); // Initial quantity is 1
@@ -13,10 +14,6 @@ export default function QuickView() {
     quickViewItem,
     addProductToCart,
     isAddedToCartProducts,
-    addToWishlist,
-    isAddedtoWishlist,
-    addToCompareItem,
-    isAddedtoCompareItem,
     cartProducts,
     updateQuantity,
   } = useContextElement();
@@ -51,7 +48,7 @@ export default function QuickView() {
           />
           <div className="wrap mw-100p-hidden">
             <div className="header">
-              <h5 className="title">Quick View</h5>
+              <h5 className="title">빠른 보기</h5>
               <span
                 className="icon-close icon-close-popup"
                 data-bs-dismiss="modal"
@@ -60,7 +57,7 @@ export default function QuickView() {
             <div className="tf-product-info-list">
               <div className="tf-product-info-heading">
                 <div className="tf-product-info-name">
-                  <div className="text text-btn-uppercase">Clothing</div>
+                  <div className="text text-btn-uppercase">상품</div>
                   <h3 className="name">{quickViewItem.title}</h3>
                   <div className="sub">
                     <div className="tf-product-info-rate">
@@ -71,26 +68,19 @@ export default function QuickView() {
                         <i className="icon icon-star" />
                         <i className="icon icon-star" />
                       </div>
-                      <div className="text text-caption-1">(134 reviews)</div>
-                    </div>
-                    <div className="tf-product-info-sold">
-                      <i className="icon icon-lightning" />
-                      <div className="text text-caption-1">
-                        18&nbsp;sold in last&nbsp;32&nbsp;hours
-                      </div>
+                      <div className="text text-caption-1">(리뷰 134개)</div>
                     </div>
                   </div>
                 </div>
                 <div className="tf-product-info-desc">
                   <div className="tf-product-info-price">
                     <h5 className="price-on-sale font-2">
-                      ${quickViewItem.price.toFixed(2)}
+                      {formatKrw(quickViewItem.price || 0)}
                     </h5>
                     {quickViewItem.oldPrice ? (
                       <>
                         <div className="compare-at-price font-2">
-                          {" "}
-                          ${quickViewItem.oldPrice.toFixed(2)}
+                          {formatKrw(quickViewItem.oldPrice || 0)}
                         </div>
                         <div className="badges-on-sale text-btn-uppercase">
                           -25%
@@ -101,15 +91,12 @@ export default function QuickView() {
                     )}
                   </div>
                   <p>
-                    The garments labelled as Committed are products that have
-                    been produced using sustainable fibres or processes,
-                    reducing their environmental impact.
+                    친환경 소재와 공정을 고려해 제작된 상품입니다.
                   </p>
                   <div className="tf-product-info-liveview">
                     <i className="icon icon-eye" />
                     <p className="text-caption-1">
-                      <span className="liveview-count">28</span> people are
-                      viewing this right now
+                      현재 <span className="liveview-count">28</span>명이 이 상품을 보고 있어요
                     </p>
                   </div>
                 </div>
@@ -121,7 +108,7 @@ export default function QuickView() {
                 />
                 <SizeSelect />
                 <div className="tf-product-info-quantity">
-                  <div className="title mb_12">Quantity:</div>
+                  <div className="title mb_12">수량:</div>
                   <QuantitySelect
                     quantity={
                       isAddedToCartProducts(quickViewItem.id)
@@ -149,50 +136,25 @@ export default function QuickView() {
                     >
                       <span>
                         {isAddedToCartProducts(quickViewItem.id)
-                          ? "Already Added"
-                          : "Add to cart -"}
+                          ? "장바구니에 추가됨"
+                          : "장바구니 담기 -"}
                       </span>
                       <span className="tf-qty-price total-price">
-                        $
-                        {isAddedToCartProducts(quickViewItem.id)
+                        {formatKrw(
+                          isAddedToCartProducts(quickViewItem.id)
                           ? (
                               quickViewItem.price *
                               cartProducts.filter(
                                 (elm) => elm.id == quickViewItem.id
                               )[0].quantity
-                            ).toFixed(2)
-                          : (quickViewItem.price * quantity).toFixed(2)}
-                      </span>
-                    </a>
-                    <a
-                      href="#compare"
-                      onClick={() => addToCompareItem(quickViewItem.id)}
-                      data-bs-toggle="offcanvas"
-                      aria-controls="compare"
-                      className="box-icon hover-tooltip compare btn-icon-action show-compare"
-                    >
-                      <span className="icon icon-gitDiff" />
-                      <span className="tooltip text-caption-2">
-                        {" "}
-                        {isAddedtoCompareItem(quickViewItem.id)
-                          ? "Already compared"
-                          : "Compare"}
-                      </span>
-                    </a>
-                    <a
-                      onClick={() => addToWishlist(quickViewItem.id)}
-                      className="box-icon hover-tooltip text-caption-2 wishlist btn-icon-action"
-                    >
-                      <span className="icon icon-heart" />
-                      <span className="tooltip text-caption-2">
-                        {isAddedtoWishlist(quickViewItem.id)
-                          ? "Already Wishlished"
-                          : "Wishlist"}
+                            )
+                          : quickViewItem.price * quantity
+                        )}
                       </span>
                     </a>
                   </div>
                   <a href="#" className="btn-style-3 text-btn-uppercase">
-                    Buy it now
+                    바로 구매
                   </a>
                 </div>
               </div>

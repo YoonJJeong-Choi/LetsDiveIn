@@ -1,12 +1,14 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { getMe } from "@/lib/api/auth";
+import { usePathname, useRouter } from "next/navigation";
+import { getMe, logout as authLogout } from "@/lib/api/auth";
+import { useContextElement } from "@/context/Context";
 
 export default function AccountSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { syncCartForLogout } = useContextElement();
   const [user, setUser] = useState(null);
 
   useEffect(() => {
@@ -43,19 +45,28 @@ export default function AccountSidebar() {
       console.log("AccountSidebar - isPartner:", isPartner);
     }
   }, [user, isPartner]);
+
+  const handleLogout = async () => {
+    try {
+      await authLogout();
+    } catch (e) {
+      // 서버 로그아웃 실패여도 프론트 상태는 정리
+    } finally {
+      setUser(null);
+      syncCartForLogout();
+      if (typeof window !== "undefined") {
+        window.location.href = "/login";
+      } else {
+        router.replace("/login");
+        router.refresh();
+      }
+    }
+  };
   
   return (
     <div className="wrap-sidebar-account">
       <div className="sidebar-account">
         <div className="account-avatar">
-          <div className="image">
-            <Image
-              alt=""
-              src="/images/avatar/user-account.jpg"
-              width={281}
-              height={280}
-            />
-          </div>
           <h6 className="mb_4">{user?.name || "사용자"}</h6>
           <div className="body-text-1">{user?.email || ""}</div>
           {isAdminOrPartner && (
@@ -65,38 +76,6 @@ export default function AccountSidebar() {
           )}
         </div>
         <ul className="my-account-nav">
-          <li>
-            <Link
-              href={`/my-account`}
-              className={`my-account-nav-item ${
-                pathname == "/my-account" ? "active" : ""
-              } `}
-            >
-              <svg
-                width={24}
-                height={24}
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M20 21V19C20 17.9391 19.5786 16.9217 18.8284 16.1716C18.0783 15.4214 17.0609 15 16 15H8C6.93913 15 5.92172 15.4214 5.17157 16.1716C4.42143 16.9217 4 17.9391 4 19V21"
-                  stroke="#181818"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M12 11C14.2091 11 16 9.20914 16 7C16 4.79086 14.2091 3 12 3C9.79086 3 8 4.79086 8 7C8 9.20914 9.79086 11 12 11Z"
-                  stroke="#181818"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              Account Details
-            </Link>
-          </li>
           <li>
             <Link
               href={`/my-account-orders`}
@@ -119,39 +98,7 @@ export default function AccountSidebar() {
                   strokeLinejoin="round"
                 />
               </svg>
-              Your Orders
-            </Link>
-          </li>
-          <li>
-            <Link
-              href={`/my-account-address`}
-              className={`my-account-nav-item ${
-                pathname == "/my-account-address" ? "active" : ""
-              } `}
-            >
-              <svg
-                width={24}
-                height={24}
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M21 10C21 17 12 23 12 23C12 23 3 17 3 10C3 7.61305 3.94821 5.32387 5.63604 3.63604C7.32387 1.94821 9.61305 1 12 1C14.3869 1 16.6761 1.94821 18.364 3.63604C20.0518 5.32387 21 7.61305 21 10Z"
-                  stroke="#181818"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M12 13C13.6569 13 15 11.6569 15 10C15 8.34315 13.6569 7 12 7C10.3431 7 9 8.34315 9 10C9 11.6569 10.3431 13 12 13Z"
-                  stroke="#181818"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              My Address
+              주문 내역
             </Link>
           </li>
           <li>
@@ -190,7 +137,7 @@ export default function AccountSidebar() {
                   strokeLinejoin="round"
                 />
               </svg>
-              Returns
+              반품 내역
             </Link>
           </li>
           <li>
@@ -215,7 +162,7 @@ export default function AccountSidebar() {
                   strokeLinejoin="round"
                 />
               </svg>
-              My Reviews
+              내 리뷰
             </Link>
           </li>
           <li>
@@ -252,10 +199,44 @@ export default function AccountSidebar() {
           </li>
           <li>
             <Link
-              href={`/login`}
+              href={`/my-account`}
+              className={`my-account-nav-item ${
+                pathname == "/my-account" ? "active" : ""
+              } `}
+            >
+              <svg
+                width={24}
+                height={24}
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M20 21V19C20 17.9391 19.5786 16.9217 18.8284 16.1716C18.0783 15.4214 17.0609 15 16 15H8C6.93913 15 5.92172 15.4214 5.17157 16.1716C4.42143 16.9217 4 17.9391 4 19V21"
+                  stroke="#181818"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M12 11C14.2091 11 16 9.20914 16 7C16 4.79086 14.2091 3 12 3C9.79086 3 8 4.79086 8 7C8 9.20914 9.79086 11 12 11Z"
+                  stroke="#181818"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              내 정보
+            </Link>
+          </li>
+          <li>
+            <button
+              type="button"
               className={`my-account-nav-item ${
                 pathname == "/login" ? "active" : ""
               } `}
+              style={{ width: "100%", textAlign: "left", background: "none", border: 0 }}
+              onClick={handleLogout}
             >
               <svg
                 width={24}
@@ -286,8 +267,8 @@ export default function AccountSidebar() {
                   strokeLinejoin="round"
                 />
               </svg>
-              Logout
-            </Link>
+              로그아웃
+            </button>
           </li>
         </ul>
       </div>

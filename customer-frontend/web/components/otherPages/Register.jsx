@@ -16,7 +16,8 @@ export default function Register() {
   const [confirmPasswordType, setConfirmPasswordType] = useState("password");
   const [message, setMessage] = useState({ type: "", text: "" });
   const [loading, setLoading] = useState(false);
-  const [agreeTerms, setAgreeTerms] = useState(true);
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
 
   const togglePassword = () => {
     setPasswordType((prevType) =>
@@ -205,10 +206,17 @@ export default function Register() {
                 </fieldset>
 
                 <fieldset className="">
+                  <label
+                    htmlFor="customerBirth"
+                    className="text-secondary-2"
+                    style={{ display: "block", marginBottom: "8px", fontSize: "14px" }}
+                  >
+                    생년월일*
+                  </label>
                   <input
                     className=""
+                    id="customerBirth"
                     type="date"
-                    placeholder="생년월일*"
                     name="customerBirth"
                     value={customerBirth}
                     onChange={(e) => setCustomerBirth(e.target.value)}
@@ -245,6 +253,7 @@ export default function Register() {
                         type="checkbox"
                         id="login-form_agree"
                         name="agree_checkbox"
+                        required
                       />
                       <div>
                         <i className="icon-check" />
@@ -257,9 +266,14 @@ export default function Register() {
                       이용약관에 동의합니다&nbsp;
                     </label>
                   </div>
-                  <Link href={`/term-of-use`} title="Terms of Service">
-                    이용약관
-                  </Link>
+                  <button
+                    type="button"
+                    className="btn p-0 border-0 text-decoration-underline"
+                    onClick={() => setShowTermsModal(true)}
+                    style={{ background: "transparent", color: "#0d6efd" }}
+                  >
+                    이용약관 보기
+                  </button>
                 </div>
               </div>
               <div className="button-submit">
@@ -287,6 +301,77 @@ export default function Register() {
           </div>
         </div>
       </div>
+      {showTermsModal && (
+        <div
+          onClick={() => setShowTermsModal(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.45)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "16px",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "min(720px, 100%)",
+              maxHeight: "80vh",
+              overflowY: "auto",
+              backgroundColor: "#fff",
+              borderRadius: "10px",
+              padding: "24px",
+            }}
+          >
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <h5 style={{ margin: 0 }}>이용약관</h5>
+              <button
+                type="button"
+                onClick={() => setShowTermsModal(false)}
+                className="btn p-0 border-0"
+                style={{ background: "transparent", fontSize: "20px", lineHeight: 1 }}
+                aria-label="이용약관 닫기"
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ whiteSpace: "pre-line", lineHeight: 1.7, color: "#444" }}>
+              {`제1조 (목적)
+본 약관은 회원이 본 서비스를 이용함에 있어 필요한 권리, 의무 및 책임사항을 규정함을 목적으로 합니다.
+
+제2조 (회원가입)
+회원은 정확한 정보를 입력하여 가입해야 하며, 허위 정보 입력 시 서비스 이용이 제한될 수 있습니다.
+
+제3조 (서비스 이용)
+회원은 관련 법령 및 본 약관을 준수하여 서비스를 이용해야 합니다.
+
+제4조 (개인정보 보호)
+회사는 회원의 개인정보를 관련 법령에 따라 보호하며, 서비스 제공 목적 외에는 사용하지 않습니다.
+
+제5조 (서비스 제한)
+회원이 서비스 운영을 방해하거나 약관을 위반할 경우 서비스 이용이 제한될 수 있습니다.
+
+제6조 (약관 변경)
+회사는 필요한 경우 약관을 변경할 수 있으며, 변경된 약관은 공지 후 적용됩니다.
+
+부칙
+본 약관은 게시일로부터 시행됩니다.`}
+            </div>
+            <div className="d-flex justify-content-end mt-4">
+              <button
+                type="button"
+                className="tf-btn btn-fill"
+                onClick={() => setShowTermsModal(false)}
+              >
+                <span className="text text-button">닫기</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

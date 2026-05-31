@@ -1,22 +1,11 @@
-import axios from "axios";
-
-const baseURL =
-  typeof window !== "undefined"
-    ? (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080")
-    : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-
-const api = axios.create({
-  baseURL,
-  withCredentials: true,
-  headers: { "Content-Type": "application/json" },
-});
+import { api } from "./http";
 
 /**
  * 반품 신청 (고객용)
  * @param {Object} payload
  * @param {number} payload.orderItemNo - 주문 아이템 번호
  * @param {string} payload.returnReasonType - 반품 사유 유형 (CHANGE_OF_MIND | DEFECT | WRONG_ITEM | ORDER_MISTAKE | OTHER)
- * @param {string} [payload.returnReason] - 상세 사유 (유형에 따라 필수)
+ * @param {string} [payload.returnReason] - 상세 사유 (유형에 따라 필수, 최대 200자)
  * @param {number[]} [payload.imageFileIds=[]] - 반품 이미지 파일 ID (불량·쇼핑몰 측 오배송·기타는 최소 1장)
  * @returns {Promise<Object>} 반품 정보
  * @throws {Error} 에러 발생 시 에러 메시지

@@ -1,6 +1,12 @@
 "use client";
 import React, { useRef, useState } from "react";
 import emailjs from "@emailjs/browser";
+import {
+  STORE_ADDRESS,
+  STORE_EMAIL,
+  STORE_PHONE_DISPLAY,
+  STORE_PHONE_TEL,
+} from "@/data/storeContact";
 export default function Contact2() {
   const formRef = useRef();
   const [success, setSuccess] = useState(true);
@@ -39,9 +45,9 @@ export default function Contact2() {
       <div className="container">
         <div className="contact-us-content">
           <div className="left">
-            <h4>Get In Touch</h4>
+            <h4>문의 보내기</h4>
             <p className="text-secondary-2">
-              Use the form below to get in touch with the sales team
+              아래 양식을 작성해 주시면 확인 후 답변 드리겠습니다.
             </p>
             <div
               className={`tfSubscribeMsg  footer-sub-element ${
@@ -50,10 +56,10 @@ export default function Contact2() {
             >
               {success ? (
                 <p style={{ color: "rgb(52, 168, 83)" }}>
-                  You have successfully subscribed.
+                  문의가 정상적으로 전송되었습니다.
                 </p>
               ) : (
-                <p style={{ color: "red" }}>Something went wrong</p>
+                <p style={{ color: "red" }}>전송에 실패했습니다. 잠시 후 다시 시도해 주세요.</p>
               )}
             </div>
             <form
@@ -68,7 +74,7 @@ export default function Contact2() {
                     <input
                       className=""
                       type="text"
-                      placeholder="Your Name*"
+                      placeholder="이름*"
                       name="name"
                       id="name"
                       tabIndex={2}
@@ -96,7 +102,7 @@ export default function Contact2() {
                     name="message"
                     id="message"
                     rows={4}
-                    placeholder="Your Message*"
+                    placeholder="문의 내용*"
                     tabIndex={2}
                     aria-required="true"
                     required
@@ -106,37 +112,36 @@ export default function Contact2() {
               </div>
               <div className="button-submit send-wrap">
                 <button className="tf-btn btn-fill" type="submit">
-                  <span className="text text-button">Send message</span>
+                  <span className="text text-button">문의 보내기</span>
                 </button>
               </div>
             </form>
           </div>
           <div className="right">
-            <h4>Information</h4>
+            <h4>연락처</h4>
             <div className="mb_20">
-              <div className="text-title mb_8">Phone:</div>
-              <p className="text-secondary">+1 666 234 8888</p>
-            </div>
-            <div className="mb_20">
-              <div className="text-title mb_8">Email:</div>
-              <p className="text-secondary">themesflat@gmail.com</p>
-            </div>
-            <div className="mb_20">
-              <div className="text-title mb_8">Address:</div>
+              <div className="text-title mb_8">전화</div>
               <p className="text-secondary">
-                2163 Phillips Gap Rd, West Jefferson, North Carolina, United
-                States
+                <a href={`tel:${STORE_PHONE_TEL}`}>{STORE_PHONE_DISPLAY}</a>
               </p>
+            </div>
+            <div className="mb_20">
+              <div className="text-title mb_8">이메일</div>
+              <p className="text-secondary">
+                <a href={`mailto:${STORE_EMAIL}`}>{STORE_EMAIL}</a>
+              </p>
+            </div>
+            <div className="mb_20">
+              <div className="text-title mb_8">주소</div>
+              <p className="text-secondary">{STORE_ADDRESS}</p>
             </div>
             <div>
-              <div className="text-title mb_8">Open Time:</div>
+              <div className="text-title mb_8">운영 시간</div>
               <p className="mb_4 open-time">
-                <span className="text-secondary">Mon - Sat:</span> 7:30am -
-                8:00pm PST
+                <span className="text-secondary">평일:</span> 09:00 – 18:00
               </p>
               <p className="open-time">
-                <span className="text-secondary">Sunday:</span> 9:00am - 5:00pm
-                PST
+                <span className="text-secondary">토·일·공휴일:</span> 휴무
               </p>
             </div>
           </div>

@@ -2,51 +2,21 @@
 import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import CountdownTimer from "../common/Countdown";
+import { useRouter } from "next/navigation";
 import { useContextElement } from "@/context/Context";
 import { getCart, updateCartItem, removeCartItem } from "@/lib/api/cart";
 import { getProductDetail } from "@/lib/api/product";
-import { getMe } from "@/lib/api/auth";
+import { getMe, isPortalAccessError } from "@/lib/api/auth";
 import { getApplicableSale } from "@/lib/api/sale";
 import { startPriceLock } from "@/lib/api/order";
-const discounts = [
-  {
-    discount: "10% OFF",
-    details: "For all orders from 200$",
-    code: "Mo234231",
-  },
-  {
-    discount: "10% OFF",
-    details: "For all orders from 200$",
-    code: "Mo234231",
-  },
-  {
-    discount: "10% OFF",
-    details: "For all orders from 200$",
-    code: "Mo234231",
-  },
-];
-const shippingOptions = [
-  {
-    id: "free",
-    label: "Free Shipping",
-    price: 0.0,
-  },
-  {
-    id: "local",
-    label: "Local:",
-    price: 35.0,
-  },
-  {
-    id: "rate",
-    label: "Flat Rate:",
-    price: 35.0,
-  },
-];
+import InlineTemplateLoader from "@/components/common/InlineTemplateLoader";
+import { useBlockQuickCartModal } from "@/hooks/useBlockQuickCartModal";
+import { formatKrw } from "@/lib/price/formatKrw";
+import { productDisplayImageSrc } from "@/lib/media/productImage";
 
 export default function ShopCart() {
-  const [activeDiscountIndex, setActiveDiscountIndex] = useState(1);
-  const [selectedOption, setSelectedOption] = useState(shippingOptions[0]);
+  useBlockQuickCartModal();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [editingOptionItemNo, setEditingOptionItemNo] = useState(null); // 옵션 편집 중인 아이템
   const [productOptionsMap, setProductOptionsMap] = useState({}); // 상품별 옵션 목록 캐시
@@ -56,6 +26,13 @@ export default function ShopCart() {
   const [actuallyLoggedIn, setActuallyLoggedIn] = useState(false);
   const [saleAdjustedTotalByCartItemNo, setSaleAdjustedTotalByCartItemNo] = useState({});
   const priceLockStartedRef = useRef(false);
+
+  const redirectToCartLogin = (reason = "login") => {
+    const query = reason === "portal"
+      ? "/login?reason=portal&next=/shopping-cart"
+      : "/login?next=/shopping-cart";
+    router.replace(query);
+  };
 
   // 아이템의 고유 키 생성 (로그인: cartItemNo, 비로그인: id + selectedOptionNo)
   const getItemKey = (item) => {
@@ -90,7 +67,7 @@ export default function ShopCart() {
         setLoading(true);
         
         // 로그인 상태 확인
-        const user = await getMe();
+        const user = await getMe({ throwOnForbidden: true });
         if (!user) {
           setActuallyLoggedIn(false);
           setLoading(false);
@@ -118,7 +95,7 @@ export default function ShopCart() {
           return {
             id: item.productNo,
             title: item.productName,
-            imgSrc: item.productImageUrl,
+            imgSrc: productDisplayImageSrc(item.productImageUrl),
             price: item.itemPrice,
             quantity: item.quantity,
             selectedOptionNo: item.optionNo,
@@ -146,6 +123,11 @@ export default function ShopCart() {
         }
         setProductOptionsMap(optionsMap);
       } catch (error) {
+        if (isPortalAccessError(error)) {
+          setActuallyLoggedIn(false);
+          redirectToCartLogin("portal");
+          return;
+        }
         console.error("장바구니 조회 실패:", error);
         // 에러 발생 시 로컬 장바구니 유지
       } finally {
@@ -172,6 +154,14 @@ export default function ShopCart() {
       // 백엔드 업데이트
       await updateCartItem(cartItemNo, { quantity: newQuantity });
     } catch (error) {
+      if (isPortalAccessError(error)) {
+        redirectToCartLogin("portal");
+        return;
+      }
+      if (error.response?.status === 401) {
+        redirectToCartLogin();
+        return;
+      }
       console.error("수량 수정 실패:", error);
       // 실패 시 롤백
       const rollbackItems = cartProducts.map((item) => {
@@ -225,7 +215,7 @@ export default function ShopCart() {
         return {
           id: item.productNo,
           title: item.productName,
-          imgSrc: item.productImageUrl,
+          imgSrc: productDisplayImageSrc(item.productImageUrl),
           price: item.itemPrice,
           quantity: item.quantity,
           selectedOptionNo: item.optionNo,
@@ -237,6 +227,14 @@ export default function ShopCart() {
       });
       setCartProducts(transformedItems);
     } catch (error) {
+      if (isPortalAccessError(error)) {
+        redirectToCartLogin("portal");
+        return;
+      }
+      if (error.response?.status === 401) {
+        redirectToCartLogin();
+        return;
+      }
       console.error("장바구니 삭제 실패:", error);
       console.error("에러 상세:", error.response?.data || error.message);
       // 실패 시 장바구니 다시 조회하여 원래 상태로 복구
@@ -256,7 +254,7 @@ export default function ShopCart() {
           return {
             id: item.productNo,
             title: item.productName,
-            imgSrc: item.productImageUrl,
+            imgSrc: productDisplayImageSrc(item.productImageUrl),
             price: item.itemPrice,
             quantity: item.quantity,
             selectedOptionNo: item.optionNo,
@@ -323,6 +321,14 @@ export default function ShopCart() {
       // 백엔드 업데이트
       await updateCartItem(cartItemNo, { optionNo: newOptionNo });
     } catch (error) {
+      if (isPortalAccessError(error)) {
+        redirectToCartLogin("portal");
+        return;
+      }
+      if (error.response?.status === 401) {
+        redirectToCartLogin();
+        return;
+      }
       console.error("옵션 변경 실패:", error);
       // 실패 시 장바구니 다시 조회
       const cartData = await getCart();
@@ -340,7 +346,7 @@ export default function ShopCart() {
         return {
           id: item.productNo,
           title: item.productName,
-          imgSrc: item.productImageUrl,
+          imgSrc: productDisplayImageSrc(item.productImageUrl),
           price: item.itemPrice,
           quantity: item.quantity,
           selectedOptionNo: item.optionNo,
@@ -354,10 +360,6 @@ export default function ShopCart() {
       setEditingOptionItemNo(null);
       alert("옵션 변경에 실패했습니다.");
     }
-  };
-
-  const handleOptionChange = (elm) => {
-    setSelectedOption(elm);
   };
 
   const calculateDiscountAmount = (salePolicy, baseTotalPrice) => {
@@ -426,20 +428,10 @@ export default function ShopCart() {
     adjustSales();
   }, [actuallyLoggedIn, cartProducts]);
 
-  useEffect(() => {
-    // loading이 끝난 후에만 실행
-    if (!loading) {
-      const progressElement = document.querySelector(".progress-cart .value");
-      if (progressElement) {
-        progressElement.style.width = "70%";
-      }
-    }
-  }, [loading]);
-
   if (loading) {
     return (
-      <div className="container text-center py-5">
-        <p>장바구니를 불러오는 중...</p>
+      <div className="container py-5 d-flex justify-content-center">
+        <InlineTemplateLoader />
       </div>
     );
   }
@@ -464,49 +456,6 @@ export default function ShopCart() {
         <div className="container">
           <div className="row">
             <div className="col-xl-8">
-              <div className="tf-cart-sold">
-                <div className="notification-sold bg-surface">
-                  <Image
-                    className="icon"
-                    alt="img"
-                    src="/images/logo/icon-fire.png"
-                    width={48}
-                    height={49}
-                  />
-                  <div className="count-text">
-                    Your cart will expire in
-                    <div
-                      className="js-countdown time-count"
-                      data-timer={600}
-                      data-labels=":,:,:,"
-                    >
-                      <CountdownTimer
-                        style={4}
-                        targetDate={new Date(new Date().getTime() - 30 * 60000)}
-                      />
-                    </div>
-                    minutes! Please checkout now before your items sell out!
-                  </div>
-                </div>
-                <div className="notification-progress">
-                  <div className="text">
-                    Buy
-                    <span className="fw-semibold text-primary">
-                      $70.00
-                    </span>{" "}
-                    more to get <span className="fw-semibold">Freeship</span>
-                  </div>
-                  <div className="progress-cart">
-                    <div
-                      className="value"
-                      style={{ width: "0%" }}
-                      data-progress={50}
-                    >
-                      <span className="round" />
-                    </div>
-                  </div>
-                </div>
-              </div>
               {cartProducts.length ? (
                 <form onSubmit={(e) => e.preventDefault()}>
                   <table className="tf-table-page-cart">
@@ -553,11 +502,11 @@ export default function ShopCart() {
                             }}
                             aria-label="전체 선택"
                           />
-                          Products
+                          상품
                         </th>
-                        <th>Price</th>
-                        <th>Quantity</th>
-                        <th>Total Price</th>
+                        <th>가격</th>
+                        <th>수량</th>
+                        <th>합계</th>
                         <th />
                       </tr>
                     </thead>
@@ -603,7 +552,7 @@ export default function ShopCart() {
                             >
                               <Image
                                 alt="product"
-                                src={elm.imgSrc}
+                                src={productDisplayImageSrc(elm.imgSrc)}
                                 width={600}
                                 height={800}
                               />
@@ -643,7 +592,7 @@ export default function ShopCart() {
                                           } else if (opt.size) {
                                             optDisplay = opt.size;
                                           }
-                                          const priceText = opt.optionAddPrice > 0 ? ` (+₩${opt.optionAddPrice.toLocaleString()})` : "";
+                                          const priceText = opt.optionAddPrice > 0 ? ` (+${formatKrw(opt.optionAddPrice)})` : "";
                                           return (
                                             <option key={opt.optionNo} value={opt.optionNo}>
                                               {optDisplay}{priceText}
@@ -671,7 +620,7 @@ export default function ShopCart() {
                             </div>
                           </td>
                           <td
-                            data-cart-title="Price"
+                            data-cart-title="가격"
                             className="tf-cart-item_price text-center"
                           >
                             <div className="cart-price text-button price-on-sale">
@@ -692,17 +641,17 @@ export default function ShopCart() {
                                         className="text-caption-1 text-secondary"
                                         style={{ textDecoration: "line-through" }}
                                       >
-                                        ₩{baseUnitPrice.toLocaleString()}
+                                        {formatKrw(baseUnitPrice)}
                                       </span>
                                     )}
-                                    <span>₩{adjustedUnitPrice.toLocaleString()}</span>
+                                    <span>{formatKrw(adjustedUnitPrice)}</span>
                                   </div>
                                 );
                               })()}
                             </div>
                           </td>
                           <td
-                            data-cart-title="Quantity"
+                            data-cart-title="수량"
                             className="tf-cart-item_quantity"
                           >
                             <div className="wg-quantity mx-md-auto">
@@ -732,7 +681,7 @@ export default function ShopCart() {
                             </div>
                           </td>
                           <td
-                            data-cart-title="Total"
+                            data-cart-title="합계"
                             className="tf-cart-item_total text-center"
                           >
                             <div className="cart-total text-button total-price">
@@ -750,17 +699,17 @@ export default function ShopCart() {
                                         className="text-caption-1 text-secondary"
                                         style={{ textDecoration: "line-through" }}
                                       >
-                                        ₩{baseTotal.toLocaleString()}
+                                        {formatKrw(baseTotal)}
                                       </span>
                                     )}
-                                    <span>₩{adjustedTotal.toLocaleString()}</span>
+                                    <span>{formatKrw(adjustedTotal)}</span>
                                   </div>
                                 );
                               })()}
                             </div>
                           </td>
                           <td
-                            data-cart-title="Remove"
+                            data-cart-title="삭제"
                             className="remove-cart"
                             onClick={() => removeItem(elm.cartItemNo, elm.id, elm.selectedOptionNo, elm.optionName, elm.guestKey)}
                           >
@@ -771,50 +720,12 @@ export default function ShopCart() {
                       })}
                     </tbody>
                   </table>
-                  <div className="ip-discount-code">
-                    <input type="text" placeholder="Add voucher discount" />
-                    <button className="tf-btn">
-                      <span className="text">Apply Code</span>
-                    </button>
-                  </div>
-                  <div className="group-discount">
-                    {discounts.map((item, index) => (
-                      <div
-                        key={index}
-                        className={`box-discount ${
-                          activeDiscountIndex === index ? "active" : ""
-                        }`}
-                        onClick={() => setActiveDiscountIndex(index)}
-                      >
-                        <div className="discount-top">
-                          <div className="discount-off">
-                            <div className="text-caption-1">Discount</div>
-                            <span className="sale-off text-btn-uppercase">
-                              {item.discount}
-                            </span>
-                          </div>
-                          <div className="discount-from">
-                            <p className="text-caption-1">{item.details}</p>
-                          </div>
-                        </div>
-                        <div className="discount-bot">
-                          <span className="text-btn-uppercase">
-                            {item.code}
-                          </span>
-                          <button className="tf-btn">
-                            <span className="text">Apply Code</span>
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
                 </form>
               ) : (
                 <div>
-                  Your wishlist is empty. Start adding your favorite products to
-                  save them for later!{" "}
+                  장바구니가 비어 있습니다. 원하는 상품을 담아보세요.{" "}
                   <Link className="btn-line" href="/shop-default-grid">
-                    Explore Products
+                    상품 보러가기
                   </Link>
                 </div>
               )}
@@ -822,75 +733,56 @@ export default function ShopCart() {
             <div className="col-xl-4">
               <div className="fl-sidebar-cart">
                 <div className="box-order bg-surface">
-                  <h5 className="title">Order Summary</h5>
-                  <div className="subtotal text-button d-flex justify-content-between align-items-center">
-                    <span>상품 총액</span>
-                    <span
-                      className="total"
-                      style={
-                        selectedSaleDiscount > 0
-                          ? { color: "#999", textDecoration: "line-through" }
-                          : undefined
-                      }
-                    >
-                      ₩{selectedBaseTotal.toLocaleString()}
-                    </span>
-                  </div>
-                  {selectedSaleDiscount > 0 && (
-                    <div className="discount text-button d-flex justify-content-between align-items-center">
-                      <span>세일 할인</span>
-                      <span className="total">-₩{selectedSaleDiscount.toLocaleString()}</span>
+                  <h5 className="title">주문 요약</h5>
+                  {selectedSaleDiscount > 0 ? (
+                    <>
+                      <div className="subtotal text-button d-flex justify-content-between align-items-center">
+                        <span>상품 총액</span>
+                        <span
+                          className="total"
+                          style={{ color: "#999", textDecoration: "line-through" }}
+                        >
+                          {formatKrw(selectedBaseTotal)}
+                        </span>
+                      </div>
+                      <div className="discount text-button d-flex justify-content-between align-items-center">
+                        <span>세일 할인</span>
+                        <span className="total">-{formatKrw(selectedSaleDiscount)}</span>
+                      </div>
+                      <div className="discount text-button d-flex justify-content-between align-items-center">
+                        <span>세일 적용 금액</span>
+                        <span className="total">{formatKrw(selectedSaleAdjustedTotal)}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="subtotal text-button d-flex justify-content-between align-items-center">
+                      <span>상품 금액</span>
+                      <span className="total">{formatKrw(selectedSaleAdjustedTotal)}</span>
                     </div>
                   )}
-                  {selectedSaleDiscount > 0 && (
-                    <div className="discount text-button d-flex justify-content-between align-items-center">
-                      <span>세일 적용 금액</span>
-                      <span className="total">₩{selectedSaleAdjustedTotal.toLocaleString()}</span>
-                    </div>
-                  )}
-                  <div className="ship">
-                    <span className="text-button">Shipping</span>
-                    <div className="flex-grow-1">
-                      {shippingOptions.map((option) => (
-                        <fieldset key={option.id} className="ship-item">
-                          <input
-                            type="radio"
-                            name="ship-check"
-                            className="tf-check-rounded"
-                            id={option.id}
-                            checked={selectedOption === option}
-                            onChange={() => handleOptionChange(option)}
-                          />
-                          <label htmlFor={option.id}>
-                            <span>{option.label}</span>
-                            <span className="price">
-                              ${option.price.toFixed(2)}
-                            </span>
-                          </label>
-                        </fieldset>
-                      ))}
-                    </div>
-                  </div>
-                  <h5 className="total-order d-flex justify-content-between align-items-center">
-                    <span>Total</span>
+                  <p className="text-caption-1 text-secondary mt-2 mb-0">
+                    전 상품 무료배송
+                  </p>
+                  <div className="subtotal text-button d-flex justify-content-between align-items-center mt-2">
+                    <span>배송비</span>
                     <span className="total">
-                      ₩{(selectedSaleAdjustedTotal + selectedOption.price).toLocaleString()}
+                      {selectedItems.length === 0 ? "—" : "무료"}
                     </span>
-                  </h5>
+                  </div>
+                  {selectedSaleDiscount > 0 && (
+                    <h5 className="total-order d-flex justify-content-between align-items-center">
+                      <span>최종 결제금액</span>
+                      <span className="total">
+                        {formatKrw(selectedSaleAdjustedTotal)}
+                      </span>
+                    </h5>
+                  )}
                   <div className="box-progress-checkout">
-                    <fieldset className="check-agree">
-                      <input
-                        type="checkbox"
-                        id="check-agree"
-                        className="tf-check-rounded"
-                      />
-                      <label htmlFor="check-agree">
-                        I agree with the
-                        <Link href={`/term-of-use`}>terms and conditions</Link>
-                      </label>
-                    </fieldset>
                     <Link 
                       href={(() => {
+                        if (!actuallyLoggedIn) {
+                          return "#";
+                        }
                         // 로그인 상태: cartItemNo만 필터링하여 전달
                         const cartItemNos = cartProducts
                           .map((item) => {
@@ -913,14 +805,35 @@ export default function ShopCart() {
                         if (selectedCartItemNos.size === 0) {
                           e.preventDefault();
                           alert("주문할 상품을 선택해주세요.");
+                          return;
+                        }
+                        if (!actuallyLoggedIn) {
+                          e.preventDefault();
+                          const confirmMessage = "주문을 진행하려면 로그인이 필요합니다.\n\n로그인 페이지로 이동하시겠습니까?";
+                          if (confirm(confirmMessage)) {
+                            router.push("/login?next=/checkout");
+                          }
                         }
                       }}
                     >
-                      Process To Checkout {selectedCartItemNos.size > 0 && `(${selectedCartItemNos.size})`}
+                      결제하기 {selectedCartItemNos.size > 0 && `(${selectedCartItemNos.size})`}
                     </Link>
-                    <p className="text-button text-center">
-                      Or continue shopping
-                    </p>
+                    <div className="text-center mt-3">
+                      <p className="text-caption-1 text-secondary mb-2">또는</p>
+                      <button
+                        type="button"
+                        className="shop-cart-continue-btn d-inline-block"
+                        onClick={() => {
+                          if (typeof window !== "undefined" && window.history.length > 1) {
+                            router.back();
+                          } else {
+                            router.push("/shop-default-grid");
+                          }
+                        }}
+                      >
+                        쇼핑 계속하기
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

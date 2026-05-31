@@ -1,8 +1,11 @@
 package com.swimshop.swim_mall.review.service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +18,10 @@ import com.swimshop.swim_mall.customer.reopository.CustomerRepository;
 import com.swimshop.swim_mall.order.entity.OrderItemEntity;
 import com.swimshop.swim_mall.order.entity.OrderEntity;
 import com.swimshop.swim_mall.order.repository.OrderItemRepository;
+import com.swimshop.swim_mall.product.entity.ProductEntity;
+import com.swimshop.swim_mall.product.repository.ProductRepository;
+import com.swimshop.swim_mall.product.service.ProductCustomerImageUrlResolver;
+import com.swimshop.swim_mall.review.dto.PartnerReviewAiCandidatesResponse;
 import com.swimshop.swim_mall.review.dto.ReviewRequestDto;
 import com.swimshop.swim_mall.review.dto.ReviewReplyRequestDto;
 import com.swimshop.swim_mall.review.dto.ReviewResponseDto;
@@ -42,6 +49,15 @@ import java.util.Map;
 @Transactional(readOnly = true)
 public class ReviewService {
 
+    @Value("${ai.review-analysis.recent-count:3}")
+    private int aiReviewAnalysisRecentCount;
+
+    @Value("${ai.review-analysis.minimum-required:3}")
+    private int aiReviewAnalysisMinimumRequired;
+
+    @Value("${ai.review-analysis.hard-cap:10}")
+    private int aiReviewAnalysisHardCap;
+
     private final ReviewRepository reviewRepository;
     private final OrderItemRepository orderItemRepository;
     private final CustomerRepository customerRepository;
@@ -50,7 +66,9 @@ public class ReviewService {
     private final CustomerActivityLogRepository customerActivityLogRepository;
     private final PointService pointService;
     private final UploadedFileRepository uploadedFileRepository;
+    private final ProductCustomerImageUrlResolver productCustomerImageUrlResolver;
     private final ReviewImageRepository reviewImageRepository;
+    private final ProductRepository productRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private static final long REVIEW_BASE_POINT = 100L;
 
@@ -296,7 +314,9 @@ public class ReviewService {
                     .orderNo(order != null ? order.getOrderNo() : null)
                     .productNo(oi.getProduct() != null ? oi.getProduct().getProductNo() : null)
                     .productName(oi.getProduct() != null ? oi.getProduct().getProductName() : null)
-                    .productImageUrl(oi.getProduct() != null ? oi.getProduct().getProductImageUrl() : null)
+                    .productImageUrl(oi.getProduct() != null
+                            ? productCustomerImageUrlResolver.resolveDisplayUrlOrEmpty(oi.getProduct())
+                            : null)
                     .optionNo(oi.getOption() != null ? oi.getOption().getOptionNo() : null)
                     .color(oi.getOption() != null ? oi.getOption().getColor() : null)
                     .size(oi.getOption() != null ? oi.getOption().getSize() : null)
@@ -357,6 +377,60 @@ public class ReviewService {
         return reviews.stream()
                 .map(this::toReviewResponseDto)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 파트너 리뷰 AI 분석용: 지정 상품의 최신 리뷰 N건(옵션·기간 필터 적용).
+     * 기간이 있으면 "그 기간 안에서 최신 N건"이 되도록 조건을 DB 조회에 직접 반영합니다.
+     */
+    public PartnerReviewAiCandidatesResponse getPartnerReviewAiCandidates(
+            HttpSession session,
+            Long productNo,
+            List<Long> optionNos,
+            Integer limit,
+            LocalDateTime fromAt,
+            LocalDateTime toAt) {
+        AccountRole userRole = authService.getCurrentUser(session).getRole();
+        if (userRole != AccountRole.PARTNER) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "파트너만 조회할 수 있습니다.");
+        }
+        Long partnerId = getPartnerIdFromSession(session);
+        checkPartnerActive(partnerId);
+
+        ProductEntity product = productRepository.findById(productNo)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+        if (product.getPartner() == null || !product.getPartner().getPartnerId().equals(partnerId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "본인 상품의 리뷰만 분석할 수 있습니다.");
+        }
+
+        int cap = limit == null ? aiReviewAnalysisRecentCount : Math.max(1, Math.min(limit, aiReviewAnalysisHardCap));
+        List<Long> optionFilter = optionNos == null ? List.of() : optionNos.stream()
+                .filter(v -> v != null)
+                .distinct()
+                .collect(Collectors.toList());
+        List<Long> optionNosForQuery = optionFilter.isEmpty() ? List.of(-1L) : optionFilter;
+
+        List<ReviewEntity> picked = reviewRepository.findPartnerAiCandidates(
+                partnerId,
+                productNo,
+                fromAt,
+                toAt,
+                optionFilter.isEmpty(),
+                optionNosForQuery,
+                PageRequest.of(0, cap));
+
+        List<ReviewResponseDto> dtos = picked.stream()
+                .map(this::toReviewResponseDto)
+                .collect(Collectors.toList());
+
+        return PartnerReviewAiCandidatesResponse.builder()
+                .reviews(dtos)
+                .recentCountDefault(aiReviewAnalysisRecentCount)
+                .minimumRequired(aiReviewAnalysisMinimumRequired)
+                .hardCap(aiReviewAnalysisHardCap)
+                .requestedLimit(cap)
+                .poolScanned(picked.size())
+                .build();
     }
 
     /**
@@ -484,7 +558,7 @@ public class ReviewService {
                 .orderNo(orderItem.getOrder().getOrderNo())
                 .productNo(review.getProduct().getProductNo())
                 .productName(review.getProduct().getProductName())
-                .productImageUrl(review.getProduct().getProductImageUrl())
+                .productImageUrl(productCustomerImageUrlResolver.resolveDisplayUrlOrEmpty(review.getProduct()))
                 .optionNo(orderItem.getOption() != null ? orderItem.getOption().getOptionNo() : null)
                 .color(orderItem.getOption() != null ? orderItem.getOption().getColor() : null)
                 .size(orderItem.getOption() != null ? orderItem.getOption().getSize() : null)

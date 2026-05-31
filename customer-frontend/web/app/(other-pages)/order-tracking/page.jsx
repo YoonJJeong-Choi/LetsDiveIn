@@ -1,6 +1,5 @@
 import Footer1 from "@/components/footers/Footer1";
 import Header1 from "@/components/headers/Header1";
-import Topbar6 from "@/components/headers/Topbar6";
 import Login from "@/components/otherPages/Login";
 import OrderTrac from "@/components/otherPages/OrderTrac";
 import Link from "next/link";
@@ -14,9 +13,7 @@ export const metadata = {
 
 export default function OrderTrackingPage() {
   return (
-    <>
-      <Topbar6 bgColor="bg-main" />
-      <Header1 />
+    <>      <Header1 />
       <div
         className="page-title"
         style={{ backgroundImage: "url(/images/section/page-title.jpg)" }}

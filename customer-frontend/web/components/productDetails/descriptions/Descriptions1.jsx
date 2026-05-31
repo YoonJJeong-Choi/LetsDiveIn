@@ -19,25 +19,25 @@ export default function Descriptions1({ product }) {
                   className={`item-title ${activeTab == 1 ? "active" : ""} `}
                   onClick={() => setActiveTab(1)}
                 >
-                  <span className="inner">Description</span>
+                  <span className="inner">상품 설명</span>
                 </li>
                 <li
                   className={`item-title ${activeTab == 2 ? "active" : ""} `}
                   onClick={() => setActiveTab(2)}
                 >
-                  <span className="inner">Customer Reviews</span>
+                  <span className="inner">고객 리뷰</span>
                 </li>
                 <li
                   className={`item-title ${activeTab == 3 ? "active" : ""} `}
                   onClick={() => setActiveTab(3)}
                 >
-                  <span className="inner">Shipping &amp; Returns</span>
+                  <span className="inner">배송 안내</span>
                 </li>
                 <li
                   className={`item-title ${activeTab == 4 ? "active" : ""} `}
                   onClick={() => setActiveTab(4)}
                 >
-                  <span className="inner">Return Policies</span>
+                  <span className="inner">반품 정책</span>
                 </li>
               </ul>
               <div className="widget-content-tab">

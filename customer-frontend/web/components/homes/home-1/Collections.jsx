@@ -1,18 +1,20 @@
 "use client";
 
-import { collections } from "@/data/collections";
+import { homeCategoryCollections } from "@/data/homeCollections";
+import { SHOP_LIST_PATH } from "@/data/navMain";
 import { Swiper, SwiperSlide } from "swiper/react";
 import Image from "next/image";
 import Link from "next/link";
 import { Navigation, Pagination } from "swiper/modules";
+
 export default function Collections() {
   return (
     <section className="flat-spacing-2 pb_0">
       <div className="container">
         <div className="heading-section-2 wow fadeInUp">
-          <h3>Categories you might like</h3>
-          <Link href={`/shop-collection`} className="btn-line">
-            View All Collection
+          <h3>카테고리</h3>
+          <Link href={SHOP_LIST_PATH} className="btn-line">
+            전체 상품 보기
           </Link>
         </div>
         <div
@@ -40,28 +42,33 @@ export default function Collections() {
               nextEl: ".snbn12",
             }}
           >
-            {collections.map((collection, index) => (
-              <SwiperSlide key={index}>
+            {homeCategoryCollections.map((collection) => (
+              <SwiperSlide key={collection.productType}>
                 <div className="collection-circle hover-img">
-                  <Link href={`/shop-collection`} className="img-style">
+                  <Link
+                    href={collection.href}
+                    className="img-style"
+                    style={{
+                      position: "relative",
+                      display: "block",
+                      width: "100%",
+                      aspectRatio: "1 / 1",
+                    }}
+                  >
                     <Image
-                      className="lazyload"
-                      data-src={collection.imgSrc}
                       alt={collection.alt}
                       src={collection.imgSrc}
-                      width={363}
-                      height={363}
+                      fill
+                      sizes="(max-width: 480px) 45vw, (max-width: 768px) 30vw, (max-width: 1200px) 22vw, 18vw"
+                      style={{ objectFit: "cover" }}
                     />
                   </Link>
                   <div className="collection-content text-center">
                     <div>
-                      <Link href={`/shop-collection`} className="cls-title">
+                      <Link href={collection.href} className="cls-title">
                         <h6 className="text">{collection.title}</h6>
                         <i className="icon icon-arrowUpRight" />
                       </Link>
-                    </div>
-                    <div className="count text-secondary">
-                      {collection.count}
                     </div>
                   </div>
                 </div>

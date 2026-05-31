@@ -13,5 +13,4 @@ public class ActionDto {
 
     private String area;
     private String recommendation;
-    private String expectedImpact;
 }

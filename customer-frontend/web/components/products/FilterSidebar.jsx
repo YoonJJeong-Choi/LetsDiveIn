@@ -5,6 +5,7 @@ import { getActiveColors } from "@/lib/api/color";
 import { PRODUCT_TYPES, PRODUCT_SUB_TYPES } from "@/data/productTaxonomy";
 
 import RangeSlider from "react-range-slider-input";
+import { formatKrw } from '@/lib/price/formatKrw';
 
 export default function FilterSidebar({ allProps }) {
   const selectedProductType = allProps.selectedProductType || null;
@@ -166,7 +167,7 @@ export default function FilterSidebar({ allProps }) {
                   id="price-min-value"
                   data-currency="₩"
                 >
-                  {allProps.price[0]?.toLocaleString() || 0}
+                  {formatKrw(allProps.price?.[0] || 0)}
                 </div>
               </div>
               <div className="box-price-item">
@@ -176,7 +177,7 @@ export default function FilterSidebar({ allProps }) {
                   id="price-max-value"
                   data-currency="₩"
                 >
-                  {allProps.price[1]?.toLocaleString() || 1000000}
+                  {formatKrw(allProps.price?.[1] || 1000000)}
                 </div>
               </div>
             </div>

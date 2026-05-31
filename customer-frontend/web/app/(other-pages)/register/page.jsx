@@ -5,7 +5,7 @@ import Link from "next/link";
 import React from "react";
 
 export const metadata = {
-  title: "회원가입 || Swim Mall",
+  title: "회원가입 || Let’s Dive In",
   description: "스윔몰 회원가입",
 };
 

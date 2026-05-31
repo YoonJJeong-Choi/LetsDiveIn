@@ -1,12 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSelector } from 'react-redux';
-import { useLocation } from 'react-router-dom';
-import { Card, Table, Button, Modal, Select, message, Tag, Space, Descriptions, Row, Col, Badge, Input, Form, Tabs } from 'antd';
+import { useLocation, useSearchParams } from 'react-router-dom';
+import { Card, Table, Button, Modal, message, Tag, Space, Descriptions, Row, Col, Badge, Input, Form, Tabs } from 'antd';
 import { ShoppingCartOutlined, EyeOutlined, CheckCircleOutlined, BellOutlined, CarOutlined, EditOutlined, ReloadOutlined } from '@ant-design/icons';
 import OrderService from 'services/OrderService';
 import DeliveryService from 'services/DeliveryService';
-
-const { Option } = Select;
 
 const getOrderStatusColor = (status) => {
 	switch (status) {
@@ -23,6 +21,44 @@ const getOrderStatusColor = (status) => {
 		default:
 			return 'default';
 	}
+};
+
+const DELIVERY_READY_DELAY_DAYS = 3;
+
+/** 발주 확인이 필요한 주문 상품이 하나라도 있는 주문 (결제 완료·진행 중) */
+const orderHasPendingConfirmation = (order) => {
+	if (!order?.orderItems?.length) return false;
+	const st = order.orderStatus;
+	if (st !== 'PAID' && st !== 'ACTIVE') return false;
+	return order.orderItems.some((item) => !item.isCancelled && item.confirmedAt == null);
+};
+
+/** 배송 READY가 발주 확인 후 N일 이상 지속 (출고 지연 의심, 대시보드 집계와 동일 기준) */
+const orderHasDelayedReadyDelivery = (order, days = DELIVERY_READY_DELAY_DAYS) => {
+	if (!order?.orderItems?.length) return false;
+	const threshold = Date.now() - days * 24 * 60 * 60 * 1000;
+	return order.orderItems.some((item) => {
+		if (item.isCancelled) return false;
+		if (item.deliveryStatus !== 'READY') return false;
+		if (!item.confirmedAt) return false;
+		return new Date(item.confirmedAt).getTime() < threshold;
+	});
+};
+
+const URL_ORDER_FILTERS = new Set([
+	'PAID',
+	'ACTIVE',
+	'CANCELLED',
+	'PENDING_PAYMENT',
+	'PAYMENT_FAILED',
+	'PENDING_CONFIRMATION',
+	'DELIVERY_DELAY',
+]);
+
+const getOrderFilterFromSearchParams = (searchParams) => {
+	const v = searchParams.get('filter');
+	if (!v || v === 'ALL') return null;
+	return URL_ORDER_FILTERS.has(v) ? v : null;
 };
 
 const getOrderStatusLabel = (status) => {
@@ -100,19 +136,19 @@ const getOrderItemStatusLabel = (status) => {
 
 const OrderManagement = () => {
 	const location = useLocation();
+	const [searchParams, setSearchParams] = useSearchParams();
 	const user = useSelector((state) => state.auth.user);
 	const userRole = user?.role || 'ADMIN'; // 기본값 ADMIN
 	
 	const [orders, setOrders] = useState([]);
 	const [totalOrders, setTotalOrders] = useState(0);
+	const [statusCounts, setStatusCounts] = useState({});
 	const [page, setPage] = useState(1);
 	const [pageSize, setPageSize] = useState(10);
 	const [loading, setLoading] = useState(false);
 	const [detailModalVisible, setDetailModalVisible] = useState(false);
-	const [statusModalVisible, setStatusModalVisible] = useState(false);
 	const [selectedOrder, setSelectedOrder] = useState(null);
-	const [selectedStatus, setSelectedStatus] = useState(null);
-	const [statusFilter, setStatusFilter] = useState(null); // null = 전체, 'PAID' = 발주 대기, 'ACTIVE' = 주문 진행중, 'CANCELLED' = 주문 취소
+	const [statusFilter, setStatusFilter] = useState(null); // null=전체 + URL `filter`와 동기화
 	const [deliveryStartModalVisible, setDeliveryStartModalVisible] = useState(false);
 	const [deliveryUpdateModalVisible, setDeliveryUpdateModalVisible] = useState(false);
 	const [editingDelivery, setEditingDelivery] = useState(null);
@@ -120,7 +156,24 @@ const OrderManagement = () => {
 
 	useEffect(() => {
 		fetchAllOrders();
-	}, [page, pageSize]);
+	}, [page, pageSize, statusFilter]);
+
+	useEffect(() => {
+		const next = getOrderFilterFromSearchParams(searchParams);
+		setStatusFilter(next);
+		setPage(1);
+	}, [searchParams]);
+
+	const applyOrderFilter = (key) => {
+		const next = key === 'ALL' ? null : key;
+		setStatusFilter(next);
+		setPage(1);
+		if (next) {
+			setSearchParams({ filter: next }, { replace: true });
+		} else {
+			setSearchParams({}, { replace: true });
+		}
+	};
 
 	// 배송 페이지에서 주문 번호와 함께 이동한 경우 주문 상세 모달 자동 열기
 	useEffect(() => {
@@ -140,19 +193,22 @@ const OrderManagement = () => {
 			const payload = response?.data || response;
 			const items = payload?.items || [];
 			const total = payload?.total ?? items.length;
+			const nextStatusCounts = payload?.statusCounts || {};
 			console.log('[Admin Orders] response meta =>', { page: payload?.page, size: payload?.size, total: payload?.total, itemsCount: Array.isArray(items) ? items.length : 0 });
 			setOrders(Array.isArray(items) ? items : []);
 			setTotalOrders(Number(total) || 0);
+			setStatusCounts(nextStatusCounts);
 		} catch (err) {
 			message.error(err.response?.data?.message || '주문 목록을 불러오는데 실패했습니다.');
 			setOrders([]);
 			setTotalOrders(0);
+			setStatusCounts({});
 		} finally {
 			setLoading(false);
 		}
 	};
 
-	const handleViewDetail = async (orderNo) => {
+	const handleViewDetail = useCallback(async (orderNo) => {
 		try {
 			const response = await OrderService.getOrderForAdmin(orderNo);
 			const orderData = response.data || response;
@@ -161,33 +217,29 @@ const OrderManagement = () => {
 		} catch (err) {
 			message.error(err.response?.data?.message || '주문 상세 정보를 불러오는데 실패했습니다.');
 		}
-	};
+	}, []);
 
-	const handleStatusChange = (order) => {
-		setSelectedOrder(order);
-		setSelectedStatus(order.orderStatus);
-		setStatusModalVisible(true);
-	};
-
-	const handleUpdateStatus = async () => {
-		if (!selectedOrder || !selectedStatus) return;
-
-		try {
-			await OrderService.updateOrderStatus(selectedOrder.orderNo, selectedStatus);
-			message.success('주문 상태가 변경되었습니다.');
-			setStatusModalVisible(false);
-			setSelectedStatus(null);
-			
-			// 주문 상세 모달이 열려있으면 상세 정보도 갱신
-			if (detailModalVisible) {
-				await handleViewDetail(selectedOrder.orderNo);
-			}
-			
-			fetchAllOrders();
-		} catch (err) {
-			message.error(err.response?.data?.message || '주문 상태 변경에 실패했습니다.');
+	/** 대시보드 등에서 `?orderNo=` 로 진입 시 상세 모달 자동 오픈 */
+	useEffect(() => {
+		const raw = searchParams.get('orderNo');
+		if (!raw) {
+			return undefined;
 		}
-	};
+		const no = Number(raw);
+		if (!Number.isFinite(no) || no <= 0) {
+			return undefined;
+		}
+		handleViewDetail(no);
+		setSearchParams(
+			(prev) => {
+				const n = new URLSearchParams(prev);
+				n.delete('orderNo');
+				return n;
+			},
+			{ replace: true }
+		);
+		return undefined;
+	}, [searchParams, handleViewDetail, setSearchParams]);
 
 	const handleConfirmOrder = async (orderNo) => {
 		try {
@@ -298,58 +350,10 @@ const OrderManagement = () => {
 		return true;
 	}).length;
 	
-	// 주문에 반품 진행 중이거나 환불 완료된 아이템이 있는지 확인 (OrderItem.status 기반)
-	const hasActiveReturnOrRefunded = (order) => {
-		if (!order.orderItems || !Array.isArray(order.orderItems)) return false;
-		return order.orderItems.some(item => {
-			if (!item.status) return false;
-			// 반품 진행 중이거나 환불 완료된 경우
-			return item.status === 'RETURN_IN_PROGRESS' || 
-				   item.status === 'REFUNDED';
-		});
-	};
-	
-	// 구매 확정된 주문 상품이 있는지 확인 (OrderItem.status 기반)
-	const hasCompletedItems = (order) => {
-		if (!order.orderItems || !Array.isArray(order.orderItems)) return false;
-		return order.orderItems.some(item => item.status === 'COMPLETED');
-	};
-	
 	// 발주 확인된 주문 상품이 있는지 확인
 	const hasConfirmedItems = (order) => {
 		if (!order.orderItems || !Array.isArray(order.orderItems)) return false;
 		return order.orderItems.some(item => item.confirmedAt != null);
-	};
-	
-	// 배송이 시작된 주문 상품이 있는지 확인
-	const hasShippedDelivery = (order) => {
-		if (!order.orderItems || !Array.isArray(order.orderItems)) return false;
-		return order.orderItems.some(item => 
-			item.deliveryStatus === 'SHIPPED' || item.deliveryStatus === 'DELIVERED'
-		);
-	};
-	
-	// 주문 상태 변경 가능 여부 확인
-	const canChangeOrderStatus = (order) => {
-		// 취소된 주문은 변경 불가
-		if (order.orderStatus === 'CANCELLED') return false;
-		
-		// 구매 확정된 주문 상품이 있으면 변경 불가
-		if (hasCompletedItems(order)) return false;
-		
-		// 반품 진행 중이거나 환불 완료된 주문은 변경 불가
-		if (hasActiveReturnOrRefunded(order)) return false;
-		
-		// 발주 확인된 OrderItem이 있으면 변경 불가
-		if (hasConfirmedItems(order)) return false;
-		
-		// 배송이 시작된 경우 변경 불가
-		if (hasShippedDelivery(order)) return false;
-		
-		// PAID 상태는 발주 확인 버튼만 표시 (상태 변경 버튼 아님)
-		if (order.orderStatus === 'PAID') return false;
-		
-		return true;
 	};
 	
 	// 모든 주문 상품이 완료되었는지 확인 (구매 확정, 환불 완료, 반품 거절 포함)
@@ -405,18 +409,29 @@ const OrderManagement = () => {
 		return { status, label: getOrderStatusLabel(status) };
 	};
 	
-	// 주문 상태별 개수 계산
+	// 주문 상태별 개수 계산 (서버가 내려준 전체 결과 기준)
 	const orderCounts = {
-		ALL: orders.length,
-		PAID: orders.filter(order => order.orderStatus === 'PAID').length,
-		ACTIVE: orders.filter(order => order.orderStatus === 'ACTIVE').length,
-		CANCELLED: orders.filter(order => order.orderStatus === 'CANCELLED').length,
+		ALL: Number(statusCounts.ALL) || 0,
+		PAID: Number(statusCounts.PAID) || 0,
+		ACTIVE: Number(statusCounts.ACTIVE) || 0,
+		CANCELLED: Number(statusCounts.CANCELLED) || 0,
+		PENDING_PAYMENT: Number(statusCounts.PENDING_PAYMENT) || 0,
+		PAYMENT_FAILED: Number(statusCounts.PAYMENT_FAILED) || 0,
+		PENDING_CONFIRMATION: Number(statusCounts.PENDING_CONFIRMATION) || 0,
+		DELIVERY_DELAY: Number(statusCounts.DELIVERY_DELAY) || 0,
 	};
 
 	// 필터링된 주문 목록
-	const filteredOrders = !statusFilter 
-		? orders 
-		: orders.filter(order => order.orderStatus === statusFilter);
+	const filteredOrders = (() => {
+		if (!statusFilter) return orders;
+		if (statusFilter === 'PENDING_CONFIRMATION') {
+			return orders.filter(orderHasPendingConfirmation);
+		}
+		if (statusFilter === 'DELIVERY_DELAY') {
+			return orders.filter((o) => orderHasDelayedReadyDelivery(o));
+		}
+		return orders.filter((order) => order.orderStatus === statusFilter);
+	})();
 
 	const formatDate = (dateString) => {
 		if (!dateString) return '-';
@@ -503,36 +518,6 @@ const OrderManagement = () => {
 							전체 발주 확인
 						</Button>
 					)}
-					{/* 관리자만 주문 상태 변경 가능 */}
-					{userRole === 'ADMIN' && canChangeOrderStatus(record) && (
-						<Button
-							type="primary"
-							icon={<CheckCircleOutlined />}
-							size="small"
-							onClick={() => handleStatusChange(record)}
-						>
-							상태 변경
-						</Button>
-					)}
-					{userRole === 'ADMIN' && !canChangeOrderStatus(record) && record.orderStatus !== 'PAID' && (
-						<Button
-							type="primary"
-							icon={<CheckCircleOutlined />}
-							size="small"
-							disabled
-							title={
-								hasConfirmedItems(record) || hasShippedDelivery(record)
-									? '발주 확인되었거나 배송이 시작된 주문은 상태 변경할 수 없습니다'
-									: hasActiveReturnOrRefunded(record)
-									? '반품 진행 중이거나 환불 완료된 주문은 상태 변경할 수 없습니다'
-									: hasCompletedItems(record)
-									? '구매 확정된 주문 상품이 있는 주문은 상태 변경할 수 없습니다'
-									: '주문 상태를 변경할 수 없습니다'
-							}
-						>
-							상태 변경
-						</Button>
-					)}
 				</Space>
 			),
 		},
@@ -581,7 +566,7 @@ const OrderManagement = () => {
 								type="primary"
 								size="large"
 								icon={<CheckCircleOutlined />}
-								onClick={() => setStatusFilter('PAID')}
+								onClick={() => applyOrderFilter('PAID')}
 								style={{ 
 									background: 'white', 
 									color: '#667eea',
@@ -605,19 +590,35 @@ const OrderManagement = () => {
 						label: `전체 (${orderCounts.ALL})`,
 					},
 					{
+						key: 'PENDING_PAYMENT',
+						label: `결제 대기 (${orderCounts.PENDING_PAYMENT})`,
+					},
+					{
+						key: 'PAYMENT_FAILED',
+						label: `결제 실패 (${orderCounts.PAYMENT_FAILED})`,
+					},
+					{
 						key: 'PAID',
 						label: `발주 대기 (${orderCounts.PAID})`,
+					},
+					{
+						key: 'PENDING_CONFIRMATION',
+						label: `발주 확인 필요 (${orderCounts.PENDING_CONFIRMATION})`,
 					},
 					{
 						key: 'ACTIVE',
 						label: `주문 진행중 (${orderCounts.ACTIVE})`,
 					},
 					{
+						key: 'DELIVERY_DELAY',
+						label: `출고 지연 의심 (${orderCounts.DELIVERY_DELAY})`,
+					},
+					{
 						key: 'CANCELLED',
 						label: `주문 취소 (${orderCounts.CANCELLED})`,
 					},
 				]}
-				onChange={(key) => setStatusFilter(key === 'ALL' ? null : key)}
+				onChange={applyOrderFilter}
 				style={{ marginBottom: 16 }}
 			/>
 
@@ -678,41 +679,6 @@ const OrderManagement = () => {
 							}}
 						>
 							전체 발주 확인
-						</Button>
-					),
-					// 관리자만 주문 상태 변경 가능
-					userRole === 'ADMIN' && selectedOrder && canChangeOrderStatus(selectedOrder) && (
-						<Button 
-							key="status" 
-							type="primary"
-							icon={<CheckCircleOutlined />}
-							onClick={() => {
-								if (selectedOrder) {
-									setSelectedStatus(selectedOrder.orderStatus);
-									setStatusModalVisible(true);
-								}
-							}}
-						>
-							상태 변경
-						</Button>
-					),
-					userRole === 'ADMIN' && selectedOrder && !canChangeOrderStatus(selectedOrder) && selectedOrder.orderStatus !== 'PAID' && (
-						<Button 
-							key="status-disabled" 
-							type="primary"
-							icon={<CheckCircleOutlined />}
-							disabled
-							title={
-								hasConfirmedItems(selectedOrder) || hasShippedDelivery(selectedOrder)
-									? '발주 확인되었거나 배송이 시작된 주문은 상태 변경할 수 없습니다'
-									: hasActiveReturnOrRefunded(selectedOrder)
-									? '반품 진행 중이거나 환불 완료된 주문은 상태 변경할 수 없습니다'
-									: hasCompletedItems(selectedOrder)
-									? '구매 확정된 주문 상품이 있는 주문은 상태 변경할 수 없습니다'
-									: '주문 상태를 변경할 수 없습니다'
-							}
-						>
-							상태 변경
 						</Button>
 					)
 				]}
@@ -953,136 +919,6 @@ const OrderManagement = () => {
 								주문 상품이 없습니다.
 							</div>
 						)}
-					</div>
-				)}
-			</Modal>
-
-			{/* 주문 상태 변경 모달 */}
-			<Modal
-				title="주문 상태 변경"
-				open={statusModalVisible}
-				onOk={handleUpdateStatus}
-				onCancel={() => {
-					setStatusModalVisible(false);
-					setSelectedStatus(null);
-					// selectedOrder는 주문 상세 모달에서 사용하므로 null로 설정하지 않음
-				}}
-				okText="확인"
-				cancelText="닫기"
-				zIndex={1001}
-				maskClosable={false}
-			>
-				{selectedOrder && (
-					<div>
-						<p>주문 번호: {selectedOrder.orderNo}</p>
-						<p>현재 상태: 
-							<Tag color={getOrderStatusColor(selectedOrder.orderStatus)} style={{ marginLeft: 8 }}>
-								{getOrderStatusLabel(selectedOrder.orderStatus)}
-							</Tag>
-						</p>
-						{/* 발주 확인/배송 상태 안내 */}
-						{(() => {
-							const hasConfirmed = hasConfirmedItems(selectedOrder);
-							const hasShippedDelivery = selectedOrder.orderItems?.some(item => 
-								item.deliveryStatus === 'SHIPPED' || item.deliveryStatus === 'DELIVERED'
-							);
-							
-							if (hasConfirmed || hasShippedDelivery) {
-								return (
-									<div style={{ 
-										marginBottom: 16, 
-										padding: 12, 
-										background: '#fff7e6', 
-										border: '1px solid #ffd591',
-										borderRadius: 4,
-										color: '#d46b08'
-									}}>
-										<strong>⚠️ 안내:</strong> {
-											hasConfirmed && hasShippedDelivery 
-												? '발주 확인되었거나 배송이 시작된 주문은 취소할 수 없습니다. 반품으로 처리해주세요.'
-												: hasConfirmed 
-													? '발주 확인된 주문은 취소할 수 없습니다. 반품으로 처리해주세요.'
-													: '배송이 시작된 주문은 취소할 수 없습니다. 반품으로 처리해주세요.'
-										}
-									</div>
-								);
-							}
-							return null;
-						})()}
-						<p style={{ marginTop: 16 }}>변경할 상태:</p>
-						<Select
-							style={{ width: '100%' }}
-							value={selectedStatus}
-							onChange={setSelectedStatus}
-							placeholder="상태를 선택하세요"
-							optionLabelProp="children"
-							getPopupContainer={(trigger) => document.body}
-							dropdownStyle={{ zIndex: 1002 }}
-						>
-							{/* 현재 상태에 따라 선택 가능한 옵션만 표시 */}
-							{selectedOrder.orderStatus === 'PENDING_PAYMENT' && (() => {
-								// 발주 확인된 OrderItem이 있는지 확인 (일반적으로 없지만 안전을 위해 확인)
-								const hasConfirmed = hasConfirmedItems(selectedOrder);
-								
-								return (
-									<>
-										<Option value="PAID">결제 완료</Option>
-										<Option value="PAYMENT_FAILED">결제 실패</Option>
-										{hasConfirmed ? (
-											<Option value="CANCELLED" disabled>
-												주문 취소 (발주 확인된 주문은 취소 불가)
-											</Option>
-										) : (
-											<Option value="CANCELLED">주문 취소</Option>
-										)}
-									</>
-								);
-							})()}
-							{selectedOrder.orderStatus === 'PAID' && (() => {
-								// 발주 확인된 OrderItem이 있는지 확인
-								const hasConfirmed = hasConfirmedItems(selectedOrder);
-								
-								return (
-									<>
-										<Option value="ACTIVE">주문 진행중</Option>
-										{hasConfirmed ? (
-											<Option value="CANCELLED" disabled>
-												주문 취소 (발주 확인된 주문은 취소 불가)
-											</Option>
-										) : (
-											<Option value="CANCELLED">주문 취소</Option>
-										)}
-									</>
-								);
-							})()}
-							{selectedOrder.orderStatus === 'ACTIVE' && (() => {
-								// 발주 확인된 OrderItem이 있는지 확인
-								const hasConfirmed = hasConfirmedItems(selectedOrder);
-								// 배송 상태 확인: 배송 중(SHIPPED) 또는 배송 완료(DELIVERED)인 경우 취소 불가
-								const hasShippedDelivery = selectedOrder.orderItems?.some(item => 
-									item.deliveryStatus === 'SHIPPED' || item.deliveryStatus === 'DELIVERED'
-								);
-								
-								// 발주 확인되었거나 배송이 시작된 경우 취소 불가
-								const cannotCancel = hasConfirmed || hasShippedDelivery;
-								
-								return (
-									<>
-										{/* 구매 확정은 OrderItem.completedAt으로 관리하므로 주문 상태 변경 옵션에서 제거 */}
-										{cannotCancel ? (
-											<Option value="CANCELLED" disabled>
-												주문 취소 ({hasConfirmed ? '발주 확인된' : '배송 중/완료 상태인'} 주문은 취소 불가)
-											</Option>
-										) : (
-											<Option value="CANCELLED">주문 취소</Option>
-										)}
-									</>
-								);
-							})()}
-							{selectedOrder.orderStatus === 'PAYMENT_FAILED' && (
-								<Option value="PENDING_PAYMENT">결제 대기 (재시도)</Option>
-							)}
-						</Select>
 					</div>
 				)}
 			</Modal>

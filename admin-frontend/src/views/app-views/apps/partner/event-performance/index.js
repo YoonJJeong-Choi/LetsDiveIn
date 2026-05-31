@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import dayjs from 'dayjs';
 import { Card, Table, Button, Space, Tag, DatePicker, Drawer, Row, Col, Statistic, message } from 'antd';
 import Chart from 'react-apexcharts';
+import { useLocation } from 'react-router-dom';
 import PartnerService from 'services/PartnerService';
 
 const { RangePicker } = DatePicker;
@@ -13,6 +14,7 @@ const formatDate = (dt) => {
 };
 
 const PartnerEventPerformance = () => {
+	const location = useLocation();
 	const [loading, setLoading] = useState(false);
 	const [rows, setRows] = useState([]);
 	const [from, setFrom] = useState(null);
@@ -90,7 +92,18 @@ const PartnerEventPerformance = () => {
 
 	useEffect(() => {
 		fetchList(true);
+	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
+
+	useEffect(() => {
+		const eventNo = location.state?.eventNo;
+		if (eventNo) {
+			setOpen(true);
+			setDetail(null);
+			fetchDetail(eventNo, null, null);
+		}
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [location.state]);
 
 	return (
 		<div>
@@ -142,7 +155,6 @@ const PartnerEventPerformance = () => {
 									}),
 									{ totalOrders: 0, totalOrderItems: 0, totalNetAmount: 0, adminRewardPoint: 0, partnerRewardPoint: 0 }
 							  );
-						const rewardSum = totals.partnerRewardPoint;
 						return (
 							<>
 								<Row gutter={[16, 16]}>

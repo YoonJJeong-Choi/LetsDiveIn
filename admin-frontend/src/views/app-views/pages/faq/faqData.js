@@ -1,119 +1,122 @@
+import { ADMIN_LOGO_SRC } from 'configs/MediaConfig';
+
 export const faqCategories = [
 	{
 		key: "faq-1",
-		image: "/img/others/img-4.png",
-		title: "Navigation",
+		image: ADMIN_LOGO_SRC,
+		title: "관리자 운영",
 	},
 	{
 		key: "faq-2",
-		image: "/img/others/img-5.png",
-		title: "Style Guide",
+		image: ADMIN_LOGO_SRC,
+		title: "파트너 운영",
 	},
 	{
 		key: "faq-3",
-		image: "/img/others/img-6.png",
-		title: "System",
+		image: ADMIN_LOGO_SRC,
+		title: "이벤트/정산",
 	},
 ]
 
 export const faqList = [
-	
-		{
-			id: "faq-1",
-			data: [
-				{
-					key: "faq-1-1",
-					title: "What are the benefits of a navigation system?",
-					desc: "So how did the classical Latin become so incoherent? According to McClintock, a 15th century typesetter likely scrambled part of Cicero's De Finibus in order to provide placeholder text to mockup various fonts for a type specimen book. Aldus Corporation, which later merged with Adobe Systems, ushered lorem ipsum into the information age with its desktop publishing software Aldus PageMaker. The program came bundled with lorem ipsum dummy text for laying out page content, and other word processors like Microsoft Word followed suit."
-				},
-				{
-					key: "faq-1-2",
-					title: "Systems Accurate",
-					desc: "Twitch tail in permanent irritation poop on grasses, drink water out of the faucet, plays league of legends have my breakfast spaghetti yarn. Taco cat backwards spells taco cat stick butt in face."
-				},
-				{
-					key: "faq-1-3",
-					title: "How to start?",
-					desc: "One brave soul did take a stab at translating the almost-not-quite-Latin. According to The Guardian, Jaspreet Singh Boparai undertook the challenge with the goal of making the text “precisely as incoherent in English as it is in Latin - and to make it incoherent in the same way”. As a result, “the Greek 'eu' in Latin became the French 'bien' [...] and the '-ing' ending in 'lorem ipsum' seemed best rendered by an '-iendum' in English.”"
-				},
-				{
-					key: "faq-1-4",
-					title: "Where to find site map?",
-					desc: "It's difficult to find examples of lorem ipsum in use before Letraset made it popular as a dummy text in the 1960s, although McClintock says he remembers coming across the lorem ipsum passage in a book of old metal type samples. So far he hasn't relocated where he once saw the passage, but the popularity of Cicero in the 15th century supports the theory that the filler text has been used for centuries."
-				},
-				{
-					key: "faq-1-5",
-					title: "How to apply?",
-					desc: "Qui animated corpse, cricket bat max brucks terribilem incessu zomby. The voodoo sacerdos flesh eater, suscitat mortuos comedere carnem virus. Zonbi tattered for solum oculi eorum defunctis go lum cerebro. Nescio brains an Undead zombies. Sicut malus putrid voodoo horror. Nigh tofth eliv ingdead."
-				},
-				{
-					key: "faq-1-6",
-					title: "Is it secure?",
-					desc: "Qui animated corpse, cricket bat max brucks terribilem incessu zomby. The voodoo sacerdos flesh eater, suscitat mortuos comedere carnem virus. Zonbi tattered for solum oculi eorum defunctis go lum cerebro. Nescio brains an Undead zombies. Sicut malus putrid voodoo horror. Nigh tofth eliv ingdead."
-				}
-			]
-		},
-
-		{
-			id: "faq-2",
-			data: [
-				{
-					key: "faq-1-1",
-					title: "Getting Started",
-					desc: "Biscuit oat cake marzipan. Danish liquorice ice cream. Marshmallow marzipan liquorice liquorice cookie topping powder tiramisu candy. Wafer pudding soufflé cake sweet roll candy canes caramels icing toffee. Cookie chocolate cake chocolate. Toffee cookie croissant cotton candy croissant. Oat cake gummi bears jelly. Apple pie bear claw jujubes sesame snaps powder. Lollipop bear claw carrot cake. Bonbon bonbon jelly beans cheesecake gummi bears muffin cake bear claw bear claw. "
-				},
-				{
-					key: "faq-1-2",
-					title: "Elements",
-					desc: "Lemon drops donut jelly-o liquorice chocolate donut. Gummies wafer gummi bears tart ice cream toffee candy canes caramels. Wafer dessert chocolate bar chocolate dragée pastry chupa chups. Bear claw bonbon liquorice powder gingerbread caramels. Topping sugar plum pastry sweet roll apple pie chocolate bar."
-				},
-				{
-					key: "faq-1-3",
-					title: "Compentents",
-					desc: "Bear claw fruitcake danish soufflé sweet roll. Chocolate chocolate tootsie roll dragée pie ice cream. Jelly beans chupa chups biscuit candy canes marshmallow toffee tootsie roll caramels. Halvah tart carrot cake gummies bonbon halvah candy sweet roll liquorice. Oat cake toffee gummi bears dessert."
-				},
-				{
-					key: "faq-1-4",
-					title: "Modules",
-					desc: "Bear claw fruitcake danish soufflé sweet roll. Chocolate chocolate tootsie roll dragée pie ice cream. Jelly beans chupa chups biscuit candy canes marshmallow toffee tootsie roll caramels. Halvah tart carrot cake gummies bonbon halvah candy sweet roll liquorice. Oat cake toffee gummi bears dessert."
-				},
-				{
-					key: "faq-1-5",
-					title: "Overview",
-					desc: "Dessert jujubes tart chocolate cake oat cake cupcake. Wafer macaroon lollipop chocolate sugar plum marshmallow lollipop jelly-o chupa chups. Lemon drops ice cream topping. Toffee pudding sweet cookie sweet chocolate. "
-				},
-				{
-					key: "faq-1-6",
-					title: "Versioning",
-					desc: "So when is it okay to use lorem ipsum? First, lorem ipsum works well for staging. It's like the props in a furniture store—filler text makes it look like someone is home. The same Wordpress template might eventually be home to a fitness blog, a photography website, or the online journal of a cupcake fanatic. Lorem ipsum helps them imagine what the lived-in website might look like."
-				}
-			]
-		},
-
-		{
-			id: "faq-3",
-			data: [
-				{
-					key: "faq-1-1",
-					title: "How to start?",
-					desc: "The path of the righteous man is beset on all sides by the iniquities of the selfish and the tyranny of evil men. Blessed is he who, in the name of charity and good will, shepherds the weak through the valley of darkness, for he is truly his brother's keeper and the finder of lost children."
-				},
-				{
-					key: "faq-1-2",
-					title: "Is there any discount?",
-					desc: "Well, the way they make shows is, they make one show. That show's called a pilot. Then they show that show to the people who make shows, and on the strength of that one show they decide if they're going to make more shows. Some pilots get picked and become television programs. "
-				},
-				{
-					key: "faq-1-3",
-					title: "Is it expensive?",
-					desc: "Normally, both your asses would be dead as fucking fried chicken, but you happen to pull this shit while I'm in a transitional period so I don't wanna kill you, I wanna help you. But I can't give you this case, it don't belong to me."
-				},
-				{
-					key: "faq-1-3",
-					title: "Is it secure?",
-					desc: "Twitch tail in permanent irritation poop on grasses, drink water out of the faucet, plays league of legends have my breakfast spaghetti yarn. Taco cat backwards spells taco cat stick butt in face."
-				}
-			]
-		}
-	
+	{
+		id: "faq-1",
+		data: [
+			{
+				key: "faq-1-1",
+				title: "관리자 메뉴가 보이지 않을 때는 어떻게 하나요?",
+				desc: "계정 역할과 권한을 먼저 확인해주세요. 관리자 메뉴는 ADMIN 권한 기준으로 노출되며, 파트너 계정으로 로그인한 경우 파트너 전용 메뉴만 표시됩니다."
+			},
+			{
+				key: "faq-1-2",
+				title: "상품 승인 상태는 어디서 확인하나요?",
+				desc: "상품 관리 화면에서 승인 대기, 활성, 반려, 비활성 상태를 확인할 수 있습니다. 반려된 상품은 반려 사유를 함께 확인해주세요."
+			},
+			{
+				key: "faq-1-3",
+				title: "파트너 신청은 어디서 처리하나요?",
+				desc: "파트너 관리 화면에서 신청 목록을 확인하고 승인 또는 반려할 수 있습니다. 승인된 파트너만 상품 등록 및 파트너 기능을 사용할 수 있습니다."
+			},
+			{
+				key: "faq-1-4",
+				title: "고객 등급은 어떤 기준으로 관리하나요?",
+				desc: "고객 등급 관리 화면에서 등급별 조건과 혜택을 관리합니다. 등급 정책 변경 전 기존 고객에게 미치는 영향을 확인해주세요."
+			},
+			{
+				key: "faq-1-5",
+				title: "FAQ는 어디서 관리하나요?",
+				desc: "FAQ 관리 화면에서 질문, 답변, 카테고리를 등록·수정·삭제할 수 있습니다. 이 도움말 화면은 운영 안내용으로 사용됩니다."
+			},
+			{
+				key: "faq-1-6",
+				title: "관리자 정보 수정 기능이 없나요?",
+				desc: "현재 관리자 프로필 수정 기능은 제공하지 않습니다. 계정 정보 변경이 필요하면 별도 운영 절차에 따라 처리해주세요."
+			}
+		]
+	},
+	{
+		id: "faq-2",
+		data: [
+			{
+				key: "faq-2-1",
+				title: "파트너 프로필은 누가 수정하나요?",
+				desc: "파트너는 파트너 설정 화면에서 일부 프로필 정보를 수정할 수 있습니다. 사업자 정보처럼 승인 이력이 필요한 항목은 변경 신청 절차를 따릅니다."
+			},
+			{
+				key: "faq-2-2",
+				title: "파트너 휴업/재활성화 신청은 어떻게 처리하나요?",
+				desc: "파트너 관리 화면에서 휴업 신청과 재활성화 신청을 확인한 뒤 승인 또는 반려할 수 있습니다. 처리 전 신청 사유를 확인해주세요."
+			},
+			{
+				key: "faq-2-3",
+				title: "파트너가 이벤트에 참여하려면 어떻게 하나요?",
+				desc: "파트너 참여형 이벤트가 공개 상태이고 신청 기간 안에 있으면 파트너가 이벤트 목록에서 참여 신청을 할 수 있습니다."
+			},
+			{
+				key: "faq-2-4",
+				title: "파트너 상품/옵션 승인은 왜 필요한가요?",
+				desc: "상품과 옵션은 고객에게 노출되는 판매 정보이므로 관리자 승인 후 활성화됩니다. 가격, 이미지, 옵션 정보가 적절한지 확인해주세요."
+			},
+			{
+				key: "faq-2-5",
+				title: "파트너가 세일 이벤트에 참여하면 어떻게 되나요?",
+				desc: "세일 이벤트는 파트너 참여 후 연동 세일 정책이 등록되어야 실제 판매 가격에 적용됩니다."
+			},
+			{
+				key: "faq-2-6",
+				title: "파트너 정산은 어디서 확인하나요?",
+				desc: "파트너 정산 관련 정보는 정산 관리 화면에서 확인합니다. 드롭다운이 아니라 사이드바의 업무 메뉴를 통해 접근하는 것을 권장합니다."
+			}
+		]
+	},
+	{
+		id: "faq-3",
+		data: [
+			{
+				key: "faq-3-1",
+				title: "이벤트 상태는 어떻게 관리하나요?",
+				desc: "비공개는 내부 준비 단계, 공개는 파트너 또는 고객에게 노출 가능한 단계, 종료는 이벤트 마감 상태입니다. 종료된 이벤트는 다시 활성화할 수 없습니다."
+			},
+			{
+				key: "faq-3-2",
+				title: "고객 사이트 공개 시작일은 무엇인가요?",
+				desc: "고객 사이트에 이벤트를 노출하기 시작하는 시각입니다. 비워두면 고객 사이트 목록과 상세에 노출되지 않습니다."
+			},
+			{
+				key: "faq-3-3",
+				title: "혜택 적용 시작일과 공개 시작일은 왜 분리되어 있나요?",
+				desc: "공개 시작일은 고객에게 보여주는 시점이고, 혜택 적용 시작일은 할인이나 포인트가 실제로 적용되는 시점입니다. 사전 홍보나 파트너 선공지 흐름을 위해 분리되어 있습니다."
+			},
+			{
+				key: "faq-3-4",
+				title: "포인트 대상 종류는 무엇을 의미하나요?",
+				desc: "포인트 지급 대상을 전체, 카테고리, 최소 주문금액 등으로 제한하는 기준입니다. 파트너 참여 여부를 제한하는 기능은 아닙니다."
+			},
+			{
+				key: "faq-3-5",
+				title: "이벤트 실적은 언제 확인하나요?",
+				desc: "이벤트 관리 화면의 실적 기능에서 이벤트별 성과를 확인할 수 있습니다. 종료 이벤트는 별도 실적 탭에서 확인합니다."
+			}
+		]
+	}
 ]

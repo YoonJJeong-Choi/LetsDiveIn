@@ -1,20 +1,18 @@
 import Footer1 from "@/components/footers/Footer1";
 import Header1 from "@/components/headers/Header1";
-import Topbar6 from "@/components/headers/Topbar6";
 import AccountSidebar from "@/components/my-account/AccountSidebar";
 import Points from "@/components/my-account/Points";
 import Link from "next/link";
 import React from "react";
 
 export const metadata = {
-  title: "포인트 || Swim Mall",
+  title: "포인트 || Let’s Dive In",
   description: "포인트 조회 및 내역",
 };
 
 export default function MyAccountPointsPage() {
   return (
     <>
-      <Topbar6 bgColor="bg-main" />
       <Header1 />
       <>
         {/* page-title */}
@@ -25,11 +23,11 @@ export default function MyAccountPointsPage() {
           <div className="container-full">
             <div className="row">
               <div className="col-12">
-                <h3 className="heading text-center">포인트</h3>
+                <h3 className="heading text-center">마이페이지</h3>
                 <ul className="breadcrumbs d-flex align-items-center justify-content-center">
                   <li>
                     <Link className="link" href={`/`}>
-                      Homepage
+                      홈
                     </Link>
                   </li>
                   <li>
@@ -37,7 +35,7 @@ export default function MyAccountPointsPage() {
                   </li>
                   <li>
                     <a className="link" href="#">
-                      Pages
+                      마이페이지
                     </a>
                   </li>
                   <li>

@@ -17,6 +17,11 @@ public interface SalePolicyRepository extends JpaRepository<SalePolicyEntity, Lo
     List<SalePolicyEntity> findByCreatedByPartnerIdAndCampaignIdOrderByCreatedAtDesc(Long partnerId, String campaignId);
     List<SalePolicyEntity> findByEvent_EventNoOrderByCreatedAtDesc(Long eventNo);
     List<SalePolicyEntity> findByStatusAndEndAtBefore(SaleStatus status, LocalDateTime endAt);
+    List<SalePolicyEntity> findByStatusAndStartAtLessThanEqualAndEndAtGreaterThanEqual(
+            SaleStatus status,
+            LocalDateTime startAt,
+            LocalDateTime endAt
+    );
 
     @Query("""
             select count(s) from SalePolicyEntity s

@@ -27,6 +27,7 @@ import com.swimshop.swim_mall.order.dto.OrderCreateRequestDto;
 import com.swimshop.swim_mall.order.dto.OrderItemResponseDto;
 import com.swimshop.swim_mall.order.dto.OrderResponseDto;
 import com.swimshop.swim_mall.order.dto.OrderStatusUpdateRequestDto;
+import com.swimshop.swim_mall.order.dto.AdminOrderListResponseDto;
 import com.swimshop.swim_mall.order.entity.OrderEntity;
 import com.swimshop.swim_mall.order.entity.OrderItemEntity;
 import com.swimshop.swim_mall.order.repository.OrderItemRepository;
@@ -455,34 +456,128 @@ public class OrderService {
      * - 파트너: 자신의 상품 주문만 조회
      */
     @Transactional
-    public com.swimshop.swim_mall.common.response.PagedResponse<OrderResponseDto> getAllOrders(HttpSession session, int page, int size) {
+    public AdminOrderListResponseDto getAllOrders(HttpSession session, int page, int size, String statusFilter) {
         // 관리자/파트너만 가능
         AccountRole userRole = authService.getCurrentUser(session).getRole();
         
         if (userRole == AccountRole.ADMIN) {
             // 관리자: 모든 주문 조회
-            List<OrderEntity> orders = orderRepository.findAllWithRelations();
+            List<OrderEntity> allOrders = orderRepository.findAllWithRelations();
+            Map<String, Long> statusCounts = buildOrderStatusCounts(allOrders);
+            List<OrderEntity> orders = filterOrders(allOrders, statusFilter);
             int total = orders.size();
             int from = Math.max(0, Math.min((page - 1) * size, total));
             int to = Math.max(from, Math.min(from + size, total));
             List<OrderResponseDto> items = orders.subList(from, to).stream()
                     .map(order -> toOrderResponseDto(order, null))
                     .collect(Collectors.toList());
-            return new com.swimshop.swim_mall.common.response.PagedResponse<>(items, total, page, size);
+            return new AdminOrderListResponseDto(items, total, page, size, statusCounts);
         } else if (userRole == AccountRole.PARTNER) {
             // 파트너: 자신의 상품 주문만 조회
             Long partnerId = getPartnerIdFromSession(session);
-            List<OrderEntity> orders = orderRepository.findByPartnerId(partnerId);
+            List<OrderEntity> allOrders = orderRepository.findByPartnerId(partnerId);
+            Map<String, Long> statusCounts = buildOrderStatusCounts(allOrders);
+            List<OrderEntity> orders = filterOrders(allOrders, statusFilter);
             int total = orders.size();
             int from = Math.max(0, Math.min((page - 1) * size, total));
             int to = Math.max(from, Math.min(from + size, total));
             List<OrderResponseDto> items = orders.subList(from, to).stream()
                     .map(order -> toOrderResponseDto(order, partnerId))
                     .collect(Collectors.toList());
-            return new com.swimshop.swim_mall.common.response.PagedResponse<>(items, total, page, size);
+            return new AdminOrderListResponseDto(items, total, page, size, statusCounts);
         } else {
             throw new BusinessException(ErrorCode.FORBIDDEN, "관리자 또는 파트너만 접근 가능합니다.");
         }
+    }
+
+    private List<OrderEntity> filterOrders(List<OrderEntity> orders, String statusFilter) {
+        String normalized = normalizeOrderFilter(statusFilter);
+        if (normalized == null) {
+            return orders;
+        }
+
+        return orders.stream()
+                .filter(order -> matchesOrderFilter(order, normalized))
+                .collect(Collectors.toList());
+    }
+
+    private String normalizeOrderFilter(String statusFilter) {
+        if (statusFilter == null || statusFilter.isBlank() || "ALL".equalsIgnoreCase(statusFilter)) {
+            return null;
+        }
+        return statusFilter.trim().toUpperCase();
+    }
+
+    private boolean matchesOrderFilter(OrderEntity order, String filter) {
+        return switch (filter) {
+            case "PENDING_CONFIRMATION" -> orderHasPendingConfirmation(order);
+            case "DELIVERY_DELAY" -> orderHasDelayedReadyDelivery(order);
+            default -> matchesBaseOrderStatus(order, filter);
+        };
+    }
+
+    private boolean matchesBaseOrderStatus(OrderEntity order, String filter) {
+        try {
+            OrderStatus targetStatus = OrderStatus.valueOf(filter);
+            return order.getOrderStatus() == targetStatus;
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "지원하지 않는 주문 필터입니다: " + filter);
+        }
+    }
+
+    private boolean orderHasPendingConfirmation(OrderEntity order) {
+        if (order == null || order.getOrderItems() == null || order.getOrderItems().isEmpty()) {
+            return false;
+        }
+        OrderStatus orderStatus = order.getOrderStatus();
+        if (orderStatus != OrderStatus.PAID && orderStatus != OrderStatus.ACTIVE) {
+            return false;
+        }
+
+        return order.getOrderItems().stream()
+                .anyMatch(item -> !Boolean.TRUE.equals(item.getIsCancelled()) && item.getConfirmedAt() == null);
+    }
+
+    private boolean orderHasDelayedReadyDelivery(OrderEntity order) {
+        if (order == null || order.getOrderItems() == null || order.getOrderItems().isEmpty()) {
+            return false;
+        }
+
+        LocalDateTime threshold = LocalDateTime.now().minusDays(3);
+        return order.getOrderItems().stream()
+                .anyMatch(item -> isDelayedReadyDeliveryItem(item, threshold));
+    }
+
+    private boolean isDelayedReadyDeliveryItem(OrderItemEntity item, LocalDateTime threshold) {
+        if (item == null || Boolean.TRUE.equals(item.getIsCancelled()) || item.getConfirmedAt() == null) {
+            return false;
+        }
+
+        DeliveryEntity delivery = item.getDelivery();
+        if (delivery == null || delivery.getDeliveryStatus() != DeliveryStatus.READY) {
+            return false;
+        }
+
+        return item.getConfirmedAt().isBefore(threshold);
+    }
+
+    private Map<String, Long> buildOrderStatusCounts(List<OrderEntity> orders) {
+        Map<String, Long> counts = new HashMap<>();
+        counts.put("ALL", (long) orders.size());
+        counts.put("PAID", countOrdersByFilter(orders, "PAID"));
+        counts.put("ACTIVE", countOrdersByFilter(orders, "ACTIVE"));
+        counts.put("CANCELLED", countOrdersByFilter(orders, "CANCELLED"));
+        counts.put("PENDING_PAYMENT", countOrdersByFilter(orders, "PENDING_PAYMENT"));
+        counts.put("PAYMENT_FAILED", countOrdersByFilter(orders, "PAYMENT_FAILED"));
+        counts.put("PENDING_CONFIRMATION", countOrdersByFilter(orders, "PENDING_CONFIRMATION"));
+        counts.put("DELIVERY_DELAY", countOrdersByFilter(orders, "DELIVERY_DELAY"));
+        return counts;
+    }
+
+    private long countOrdersByFilter(List<OrderEntity> orders, String filter) {
+        return orders.stream()
+                .filter(order -> matchesOrderFilter(order, filter))
+                .count();
     }
 
     /**
@@ -525,39 +620,13 @@ public class OrderService {
     }
 
     /**
-     * 주문 상태 변경 (관리자만)
-     * PATCH /api/orders/{orderNo}/status
-     * - 관리자: 모든 주문 상태 변경 가능 (예외 상황 처리용)
-     * - 파트너: 주문 상태 변경 불가 (발주 확인 API 사용)
+     * 주문 상태 수동 변경 (관리자) — 사용하지 않음.
+     * 주문 상태는 결제 승인, 발주 확인, 배송, 반품 등 전용 API로만 변경합니다.
      */
-    @Transactional
     public OrderResponseDto updateOrderStatus(HttpSession session, Long orderNo, OrderStatusUpdateRequestDto requestDto) {
-        // 관리자만 가능
         authService.requireRole(session, AccountRole.ADMIN);
-        
-        // 주문 조회 (OrderItem과 Delivery를 함께 조회)
-        OrderEntity order = orderRepository.findByOrderNoWithRelations(orderNo)
-                .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
-        
-        // 주문 상태 변경 (검증 포함)
-        try {
-            order.changeStatus(requestDto.getOrderStatus());
-        } catch (IllegalStateException e) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST, e.getMessage());
-        }
-        
-        // 주문 취소 시 모든 OrderItem의 isCancelled를 true로 설정
-        if (requestDto.getOrderStatus() == OrderStatus.CANCELLED) {
-            List<OrderItemEntity> orderItems = orderItemRepository.findByOrder(order);
-            for (OrderItemEntity orderItem : orderItems) {
-                orderItem.cancel();
-            }
-            orderItemRepository.saveAll(orderItems);
-        }
-        
-        order = orderRepository.save(order);
-        
-        return toOrderResponseDto(order, null);
+        throw new BusinessException(ErrorCode.FORBIDDEN,
+                "주문 상태 수동 변경은 제공하지 않습니다. 결제·발주 확인·배송·반품 처리 흐름을 이용해 주세요.");
     }
 
     /**
@@ -1031,7 +1100,8 @@ public class OrderService {
                     .paymentAmount(order.getPayment().getPaymentAmount())
                     .paymentCreatedAt(order.getPayment().getPaymentCreatedAt())
                     .paidAt(order.getPayment().getPaidAt())
-                    .paymentCancelYn(order.getPayment().getPaymentCancelYn());
+                    .paymentCancelYn(order.getPayment().getPaymentCancelYn())
+                    .paymentFailReason(order.getPayment().getFailReason());
         } else {
             // Payment가 없는 경우 (레거시 호환)
             builder.paymentMethod(order.getPaymentMethod())

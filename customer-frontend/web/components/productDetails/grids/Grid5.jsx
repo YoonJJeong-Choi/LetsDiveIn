@@ -1,16 +1,41 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 
-import { images } from "@/data/singleProductSliders";
 import Image from "next/image";
+import {
+  DEFAULT_PRODUCT_PLACEHOLDER,
+  productDisplayImageSrc,
+} from "@/lib/media/productImage";
+
+function trimUrl(url) {
+  if (url == null) return "";
+  return String(url).trim();
+}
 
 export default function Grid5({
   activeColor = "gray",
   setActiveColor = () => {},
   firstItem,
 }) {
-  const finalItems = [...images];
-  images[0].src = firstItem ?? images[0].src;
+  const primarySrc = productDisplayImageSrc(trimUrl(firstItem) || null);
+  const finalItems =
+    trimUrl(firstItem) || primarySrc
+      ? [
+          {
+            dataScroll: "gray",
+            src: primarySrc,
+            width: 800,
+            height: 800,
+          },
+        ]
+      : [
+          {
+            dataScroll: "gray",
+            src: productDisplayImageSrc(DEFAULT_PRODUCT_PLACEHOLDER),
+            width: 800,
+            height: 800,
+          },
+        ];
 
   // itemsFinal2[0].src = products[0].imgSrc;
 

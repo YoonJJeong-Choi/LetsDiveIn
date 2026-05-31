@@ -1,19 +1,17 @@
 import Footer1 from "@/components/footers/Footer1";
 import Header1 from "@/components/headers/Header1";
-import Topbar6 from "@/components/headers/Topbar6";
 import PartnerApplication from "@/components/otherPages/PartnerApplication";
 import Link from "next/link";
 import React from "react";
 
 export const metadata = {
-  title: "파트너 입점 신청 || Swim Mall",
-  description: "Swim Mall 파트너 입점 신청 페이지",
+  title: "파트너 입점 신청 || Let’s Dive In",
+  description: "Let’s Dive In 파트너 입점 신청 페이지",
 };
 
 export default function PartnerApplicationPage() {
   return (
     <>
-      <Topbar6 bgColor="bg-main" />
       <Header1 />
       <div
         className="page-title"

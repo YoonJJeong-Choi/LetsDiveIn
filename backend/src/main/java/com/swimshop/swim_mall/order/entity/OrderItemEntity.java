@@ -61,7 +61,7 @@ public class OrderItemEntity {
     // (false: 정상 주문, true: 취소)
 
     @OneToOne(mappedBy = "orderItem", cascade = CascadeType.ALL, orphanRemoval = true)
-    private DeliveryEntity delivery; //배송 정보 (배송 시작 시 생성)
+    private DeliveryEntity delivery; // 배송 정보 (발주 확인 시 생성, 1:1)
 
     @OneToOne(mappedBy = "orderItem", cascade = CascadeType.ALL, orphanRemoval = true)
     private ReturnEntity returnEntity; //반품 정보 (반품 신청 시 생성)

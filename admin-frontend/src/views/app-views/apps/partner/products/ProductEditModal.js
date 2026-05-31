@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Form, Input, InputNumber, Select, Button, Space, message, Alert, Upload, Radio, List } from 'antd';
+import { Modal, Form, Input, InputNumber, Select, Button, Space, message, Alert, Upload, Radio, List, Card } from 'antd';
 import { PlusOutlined, MinusCircleOutlined, ExclamationCircleOutlined, UploadOutlined } from '@ant-design/icons';
 import FileService from 'services/FileService';
 import AdminProductService from 'services/AdminProductService';
+import AdminService from 'services/AdminService';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -12,8 +13,8 @@ const PRODUCT_TYPES = [
 	{ value: 'SWIMSUIT_MEN', label: '남성 수영복' },
 	{ value: 'SWIMSUIT_WOMEN', label: '여성 수영복' },
 	{ value: 'SWIMSUIT_KIDS', label: '아동 수영복' },
-	{ value: 'SWIM_CAP', label: '수영모자' },
-	{ value: 'SWIM_GOGGLES', label: '수영안경' },
+	{ value: 'SWIM_CAP', label: '수모' },
+	{ value: 'SWIM_GOGGLES', label: '수경' },
 	{ value: 'FINS', label: '오리발' },
 	{ value: 'SWIM_TOY', label: '수영용품' },
 	{ value: 'ETC', label: '기타' },
@@ -42,16 +43,129 @@ const PRODUCT_SUB_TYPES = {
 	],
 };
 
-const ProductEditModal = ({ visible, onCancel, onSubmit, loading, product }) => {
+const SWIMSUIT_SIZE_OPTIONS = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
+const FINS_SIZE_OPTIONS = ['220', '225', '230', '235', '240', '245', '250', '255', '260', '265', '270', '275', '280', '285', '290', '295', '300'];
+const SIZE_TEMPLATES = {
+	SWIMSUIT_MEN_PANTS: ['waistCm', 'hipCm'],
+	SWIMSUIT_WOMEN_ONEPIECE: ['chestCm', 'waistCm', 'hipCm', 'torsoCm'],
+	SWIMSUIT_WOMEN_BIKINI: ['chestCm', 'waistCm', 'hipCm'],
+	FINS_SIZE: ['footLengthCm'],
+};
+const TEMPLATE_LABELS = {
+	waistCm: '허리',
+	hipCm: '엉덩이',
+	chestCm: '가슴',
+	torsoCm: '몸통',
+	footLengthCm: '발길이(cm)',
+};
+
+const isStructuredSizeType = (productType) => ['SWIMSUIT_MEN', 'SWIMSUIT_WOMEN', 'FINS'].includes(productType);
+const getSizeChoices = (productType) => {
+	if (productType === 'FINS') return FINS_SIZE_OPTIONS;
+	if (productType === 'SWIMSUIT_MEN' || productType === 'SWIMSUIT_WOMEN') return SWIMSUIT_SIZE_OPTIONS;
+	return [];
+};
+const parseOptionSize = (rawSize) => {
+	if (!rawSize || typeof rawSize !== 'string') {
+		return { size: '', sizeLabel: '' };
+	}
+	const [sizeLabel] = rawSize.split('|');
+	return {
+		size: rawSize,
+		sizeLabel: sizeLabel || '',
+	};
+};
+const composeOptionSize = (opt, productType) => {
+	if (!isStructuredSizeType(productType)) return opt.size || null;
+	const label = opt.sizeLabel || null;
+	if (!label) return null;
+	return label;
+};
+const isSwimsuitType = (productType) => ['SWIMSUIT_MEN', 'SWIMSUIT_WOMEN'].includes(productType);
+const isFinsType = (productType) => productType === 'FINS';
+const getSizeGuideTemplateKey = (productType, productSubType) => {
+	if (productType === 'FINS') return 'FINS_SIZE';
+	if (productType === 'SWIMSUIT_MEN') return 'SWIMSUIT_MEN_PANTS';
+	if (productType === 'SWIMSUIT_WOMEN') {
+		return productSubType === 'BIKINI' ? 'SWIMSUIT_WOMEN_BIKINI' : 'SWIMSUIT_WOMEN_ONEPIECE';
+	}
+	return null;
+};
+const parseSizeGuideRows = (sizeGuideJson) => {
+	if (!sizeGuideJson) return [];
+	try {
+		const parsed = JSON.parse(sizeGuideJson);
+		if (!parsed?.rows || !Array.isArray(parsed.rows)) return [];
+		return parsed.rows;
+	} catch {
+		return [];
+	}
+};
+
+const ProductEditModal = ({ visible, onCancel, onSubmit, loading, product, embedded = false }) => {
 	const [form] = Form.useForm();
 	const [selectedProductType, setSelectedProductType] = useState(null);
+	const selectedProductSubType = Form.useWatch('productSubType', form);
 	const [imageItems, setImageItems] = useState([]); // {imageUrl, sortOrder, isPrimary, fileId?}
+	const [colorOptions, setColorOptions] = useState([]);
+
+	useEffect(() => {
+		const fetchColorOptions = async () => {
+			if (!visible) return;
+			try {
+				const response = await AdminService.getActiveColors();
+				const rows = response?.data ?? response ?? [];
+				setColorOptions(
+					(Array.isArray(rows) ? rows : []).map((row) => ({
+						value: row.code,
+						label: row.label || row.code,
+					}))
+				);
+			} catch (err) {
+				setColorOptions([]);
+				message.error(err?.response?.data?.message || err?.message || '컬러 목록 조회에 실패했습니다.');
+			}
+		};
+		fetchColorOptions();
+	}, [visible]);
 
 	useEffect(() => {
 		if (visible && product) {
 			// 기존 상품 데이터로 폼 초기화
 			const subTypes = PRODUCT_SUB_TYPES[product.productType] || [];
 			setSelectedProductType(product.productType);
+			const setInitialImages = async () => {
+				try {
+					const imageList = await AdminProductService.getImages(product.productNo);
+					const normalized = Array.isArray(imageList) ? imageList : (imageList?.data || []);
+					if (Array.isArray(normalized) && normalized.length > 0) {
+						setImageItems(
+							[...normalized]
+								.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+								.map((img, idx) => ({
+									imageUrl: img.imageUrl || img.src,
+									fileId: img.fileId || null,
+									sortOrder: typeof img.sortOrder === 'number' ? img.sortOrder : idx,
+									isPrimary: !!img.isPrimary || idx === 0,
+								}))
+						);
+						return;
+					}
+				} catch (e) {
+					// 이미지 조회 실패 시 fallback 사용
+				}
+				setImageItems(
+					product.productImageUrl
+						? [{
+							imageUrl: product.productImageUrl,
+							fileId: null,
+							sortOrder: 0,
+							isPrimary: true,
+						}]
+						: []
+				);
+			};
+			setInitialImages();
 			
 			// 폼 필드 값 설정 (초기화 전에 reset)
 			form.resetFields();
@@ -66,16 +180,23 @@ const ProductEditModal = ({ visible, onCancel, onSubmit, loading, product }) => 
 						: product.productSubType,
 					productPrice: parseInt(product.productPrice) || 0,
 					productDescription: product.productDescription || '', // null/undefined 처리
+					materialInfo: product.materialInfo || '',
+					originCountry: product.originCountry || '',
+					manufactureCountry: product.manufactureCountry || '',
+					careInstructions: product.careInstructions || '',
+					sizeGuideText: product.sizeGuideText || '',
+					sizeGuideRows: parseSizeGuideRows(product.sizeGuideJson),
 					productImageUrl: product.productImageUrl || '',
 					productActiveStatus: product.productActiveStatus || 'ACTIVE', // 상태 필드 추가
 					options: product.options && product.options.length > 0
 						? product.options.map(opt => ({
 								optionNo: opt.optionNo,
-								color: opt.color || '',
+								color: opt.color || undefined,
 								size: opt.size || '',
+								sizeLabel: parseOptionSize(opt.size).sizeLabel,
 								optionAddPrice: opt.optionAddPrice || 0,
 							}))
-						: [{ color: '', size: '', optionAddPrice: 0 }],
+						: [{ color: undefined, size: '', sizeLabel: '', optionAddPrice: 0 }],
 				});
 			}, 0);
 		} else if (!visible) {
@@ -116,7 +237,7 @@ const ProductEditModal = ({ visible, onCancel, onSubmit, loading, product }) => 
 			const options = values.options.map(opt => ({
 				optionNo: opt.optionNo || null, // 기존 옵션 번호 (수정 시)
 				color: opt.color || null,
-				size: opt.size || null,
+				size: composeOptionSize(opt, values.productType),
 				optionAddPrice: opt.optionAddPrice || 0,
 			}));
 
@@ -127,6 +248,28 @@ const ProductEditModal = ({ visible, onCancel, onSubmit, loading, product }) => 
 				productSubType: values.productSubType || 'NONE',
 				productPrice: String(values.productPrice),
 				productDescription: values.productDescription,
+				materialInfo: values.materialInfo || null,
+				originCountry: values.originCountry || null,
+				manufactureCountry: values.manufactureCountry || null,
+				careInstructions: values.careInstructions || null,
+				sizeGuideText: (isSwimsuitType(values.productType) || isFinsType(values.productType))
+					? null
+					: (values.sizeGuideText || null),
+				sizeGuideJson: (() => {
+					const templateKey = getSizeGuideTemplateKey(values.productType, values.productSubType || 'NONE');
+					if (!templateKey) return null;
+					const metrics = SIZE_TEMPLATES[templateKey] || [];
+					const rows = (values.sizeGuideRows || [])
+						.filter((r) => r?.sizeLabel)
+						.map((r) => {
+							const row = { sizeLabel: r.sizeLabel };
+							metrics.forEach((metric) => {
+								row[metric] = r[metric] ?? null;
+							});
+							return row;
+						});
+					return rows.length > 0 ? JSON.stringify({ templateKey, rows }) : null;
+				})(),
 				// 대표 이미지 URL은 업로드 목록에서 선택된 대표로 동기화
 				productImageUrl: primary?.imageUrl || values.productImageUrl,
 				options: options,
@@ -145,6 +288,16 @@ const ProductEditModal = ({ visible, onCancel, onSubmit, loading, product }) => 
 		if (!selectedProductType) return [];
 		return PRODUCT_SUB_TYPES[selectedProductType] || [];
 	};
+	const existingOptionColors = (product?.options || [])
+		.map((opt) => opt?.color)
+		.filter((color) => typeof color === 'string' && color.trim().length > 0)
+		.map((color) => color.trim());
+	const colorSelectOptions = [
+		...colorOptions,
+		...existingOptionColors
+			.filter((color) => !colorOptions.some((item) => item.value === color))
+			.map((color) => ({ value: color, label: `${color} (기존값)` })),
+	];
 
 	if (!product) {
 		return null;
@@ -152,17 +305,8 @@ const ProductEditModal = ({ visible, onCancel, onSubmit, loading, product }) => 
 
 	const isRejected = product?.productActiveStatus === 'REJECTED';
 
-	return (
-		<Modal
-			title={isRejected ? "상품 수정 및 재신청" : "상품 수정"}
-			open={visible}
-			onCancel={onCancel}
-			onOk={handleSubmit}
-			confirmLoading={loading}
-			width={800}
-			okText={isRejected ? "수정 및 재신청" : "수정"}
-			cancelText="닫기"
-		>
+	const formContent = (
+		<>
 		{/* PENDING_UPDATE 상태에서는 이전 거절 사유를 숨김 (새로운 수정 요청이므로) */}
 		{product?.rejectionReason && product.productActiveStatus !== 'PENDING_UPDATE' && (
 			<Alert
@@ -186,7 +330,7 @@ const ProductEditModal = ({ visible, onCancel, onSubmit, loading, product }) => 
 			{product.productActiveStatus === 'ACTIVE' && (
 				<Alert
 					message="상품 수정 안내"
-					description="재심사 필수 항목(상품명, 카테고리, 가격)을 변경하면 관리자 승인이 필요합니다. 일반 항목(설명, 이미지)은 즉시 반영됩니다."
+					description="재심사 필수 항목(상품명, 카테고리, 가격)을 변경하면 관리자 승인이 필요합니다."
 					type="info"
 					showIcon
 					style={{ marginBottom: 16 }}
@@ -196,13 +340,6 @@ const ProductEditModal = ({ visible, onCancel, onSubmit, loading, product }) => 
 				form={form}
 				layout="vertical"
 			>
-				<Alert
-					type="info"
-					message="상품 이미지"
-					description="여러 장을 업로드하고 순서를 정할 수 있습니다. 대표 이미지를 선택하세요."
-					showIcon
-					style={{ marginBottom: 12 }}
-				/>
 				<Space direction="vertical" style={{ width: '100%', marginBottom: 8 }}>
 					<Upload
 						beforeUpload={(file) => {
@@ -366,8 +503,55 @@ const ProductEditModal = ({ visible, onCancel, onSubmit, loading, product }) => 
 					/>
 				</Form.Item>
 
-				<Form.Item name="productImageUrl" label="대표 이미지 URL">
-					<Input placeholder="대표 이미지는 위 업로더에서 선택하세요" disabled />
+				<Form.Item name="materialInfo" label="소재/혼용률">
+					<TextArea rows={2} placeholder="예: 폴리에스터 82%, 스판덱스 18%" maxLength={1000} showCount />
+				</Form.Item>
+
+				<Form.Item name="originCountry" label="원산지">
+					<Input placeholder="예: 대한민국" />
+				</Form.Item>
+
+				<Form.Item name="manufactureCountry" label="제조국">
+					<Input placeholder="예: 대한민국" />
+				</Form.Item>
+
+				<Form.Item name="careInstructions" label="세탁 권장 사항">
+					<TextArea rows={2} placeholder="예: 세탁기 사용 시 30°C 이하 권장 / 단시간 탈수 권장" maxLength={1000} showCount />
+				</Form.Item>
+
+				{(isSwimsuitType(selectedProductType) || isFinsType(selectedProductType)) ? (
+					<Form.List name="sizeGuideRows">
+						{(fields, { add, remove }) => (
+							<Form.Item label={isFinsType(selectedProductType) ? "사이즈표(오리발)" : "사이즈표(수영복)"}>
+								{fields.map(({ key, name, ...restField }) => (
+									<Space key={key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
+										<Form.Item {...restField} name={[name, 'sizeLabel']} rules={[{ required: true, message: '사이즈' }]}>
+											<Select placeholder={isFinsType(selectedProductType) ? "신발(mm)" : "사이즈"} style={{ width: 120 }}>
+												{(isFinsType(selectedProductType) ? FINS_SIZE_OPTIONS : SWIMSUIT_SIZE_OPTIONS).map((s) => (
+													<Option key={s} value={s}>{isFinsType(selectedProductType) ? `${s}mm` : s}</Option>
+												))}
+											</Select>
+										</Form.Item>
+										{(SIZE_TEMPLATES[getSizeGuideTemplateKey(selectedProductType, selectedProductSubType || 'NONE')] || []).map((metric) => (
+											<Form.Item key={metric} {...restField} name={[name, metric]}>
+												<InputNumber placeholder={TEMPLATE_LABELS[metric]} min={1} style={{ width: 110 }} />
+											</Form.Item>
+										))}
+										{fields.length > 1 && <MinusCircleOutlined onClick={() => remove(name)} />}
+									</Space>
+								))}
+								<Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>사이즈 행 추가</Button>
+							</Form.Item>
+						)}
+					</Form.List>
+				) : (
+					<Form.Item name="sizeGuideText" label="사이즈 안내">
+						<TextArea rows={4} placeholder={"예: Free: 가슴 90~100 / 허리 70~80"} maxLength={5000} showCount />
+					</Form.Item>
+				)}
+
+				<Form.Item name="productImageUrl" hidden>
+					<Input type="hidden" />
 				</Form.Item>
 
 				<Form.Item label="옵션">
@@ -387,16 +571,41 @@ const ProductEditModal = ({ visible, onCancel, onSubmit, loading, product }) => 
 											{...restField}
 											name={[name, 'color']}
 											style={{ width: 150 }}
+											rules={[{ required: true, message: '컬러 선택' }]}
 										>
-											<Input placeholder="색상 (예: 빨강)" />
+											<Select
+												placeholder="컬러 선택"
+												options={colorSelectOptions}
+												showSearch
+												optionFilterProp="label"
+											/>
 										</Form.Item>
-										<Form.Item
-											{...restField}
-											name={[name, 'size']}
-											style={{ width: 150 }}
-										>
-											<Input placeholder="사이즈 (예: M)" />
-										</Form.Item>
+										{isStructuredSizeType(selectedProductType) ? (
+											<>
+												<Form.Item
+													{...restField}
+													name={[name, 'sizeLabel']}
+													style={{ width: 140 }}
+													rules={[{ required: true, message: '사이즈 선택' }]}
+												>
+													<Select placeholder="사이즈">
+														{getSizeChoices(selectedProductType).map((size) => (
+															<Option key={size} value={size}>
+																{selectedProductType === 'FINS' ? `${size}mm` : size}
+															</Option>
+														))}
+													</Select>
+												</Form.Item>
+											</>
+										) : (
+											<Form.Item
+												{...restField}
+												name={[name, 'size']}
+												style={{ width: 150 }}
+											>
+												<Input placeholder="사이즈 (예: M)" />
+											</Form.Item>
+										)}
 										<Form.Item
 											{...restField}
 											name={[name, 'optionAddPrice']}
@@ -429,6 +638,35 @@ const ProductEditModal = ({ visible, onCancel, onSubmit, loading, product }) => 
 					</Form.List>
 				</Form.Item>
 			</Form>
+		</>
+	);
+
+	if (embedded) {
+		return (
+			<Card>
+				{formContent}
+				<div className="text-right">
+					<Button className="mr-2" onClick={onCancel}>닫기</Button>
+					<Button type="primary" loading={loading} onClick={handleSubmit}>
+						{isRejected ? "수정 및 재신청" : "수정"}
+					</Button>
+				</div>
+			</Card>
+		);
+	}
+
+	return (
+		<Modal
+			title={isRejected ? "상품 수정 및 재신청" : "상품 수정"}
+			open={visible}
+			onCancel={onCancel}
+			onOk={handleSubmit}
+			confirmLoading={loading}
+			width={800}
+			okText={isRejected ? "수정 및 재신청" : "수정"}
+			cancelText="닫기"
+		>
+			{formContent}
 		</Modal>
 	);
 };

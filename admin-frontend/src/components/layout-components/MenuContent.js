@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Menu, Grid } from 'antd';
 import IntlMessage from '../util-components/IntlMessage';
@@ -89,16 +89,24 @@ const SideNavContent = (props) => {
 	const { routeInfo, hideGroupTitle, sideNavTheme = SIDE_NAV_LIGHT } = props;
 	const { user } = useSelector(state => state.auth);
 	const userRole = user?.role || null;
+	const routeKey = routeInfo?.key;
 
 	const menuItems = useMemo(() => getSideNavMenuItem(navigationConfig, userRole), [userRole]);
+
+	const [openKeys, setOpenKeys] = useState(() => setDefaultOpen(routeKey));
+
+	useEffect(() => {
+		setOpenKeys(setDefaultOpen(routeKey));
+	}, [routeKey]);
 
 	return (
 		<Menu
 			mode="inline"
 			theme={sideNavTheme === SIDE_NAV_LIGHT ? "light" : "dark"}
 			style={{ height: "100%", borderInlineEnd: 0 }}
-			defaultSelectedKeys={[routeInfo?.key]}
-			defaultOpenKeys={setDefaultOpen(routeInfo?.key)}
+			selectedKeys={routeKey ? [routeKey] : []}
+			openKeys={openKeys}
+			onOpenChange={setOpenKeys}
 			className={hideGroupTitle ? "hide-group-title" : ""}
 			items={menuItems}
 		/>

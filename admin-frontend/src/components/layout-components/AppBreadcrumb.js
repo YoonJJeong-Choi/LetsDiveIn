@@ -1,49 +1,53 @@
-import React, { Component } from 'react';
+import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Breadcrumb } from 'antd';
 import navigationConfig from "configs/NavigationConfig";
 import IntlMessage from 'components/util-components/IntlMessage';
 
-let breadcrumbData = { 
-	'/app' : <IntlMessage id="home" />
+let breadcrumbData = {};
+
+const assignBreadcrumbMap = (navItems) => {
+	navItems.forEach((item) => {
+		if (item?.path) {
+			breadcrumbData[item.path] = <IntlMessage id={item.title} />;
+		}
+		if (item?.submenu?.length) {
+			assignBreadcrumbMap(item.submenu);
+		}
+	});
 };
 
-navigationConfig.forEach((elm, i) => {
-	const assignBreadcrumb = (obj) => breadcrumbData[obj.path] = <IntlMessage id={obj.title} />;
-	assignBreadcrumb(elm);
-	if (elm.submenu) {
-		elm.submenu.forEach( elm => {
-			assignBreadcrumb(elm)
-			if(elm.submenu) {
-				elm.submenu.forEach( elm => {
-					assignBreadcrumb(elm)
-				})
-			}
-		})
-	}
-})
+assignBreadcrumbMap(navigationConfig);
 
 const BreadcrumbRoute = props => {
 	const location = useLocation();
+	const fullPath = `${location.pathname}${location.search}`;
 	const pathSnippets = location.pathname.split('/').filter(i => i);
 	const breadcrumbItems = pathSnippets.map((_, index) => {
 		const url = `/${pathSnippets.slice(0, index + 1).join('/')}`;
-		return {
-			title: <Link to={url}>{breadcrumbData[url]}</Link>
+		const title = breadcrumbData[url];
+		if (!title) {
+			return null;
 		}
-	});
+		return {
+			title: <Link to={url}>{title}</Link>
+		}
+	}).filter(Boolean);
+
+	const exactTitle = breadcrumbData[fullPath];
+	if (location.search && exactTitle && breadcrumbItems.length > 0) {
+		breadcrumbItems[breadcrumbItems.length - 1] = {
+			title: exactTitle
+		};
+	}
   
 	return (
 		<Breadcrumb items={breadcrumbItems} />
 	);
 };
 
-export class AppBreadcrumb extends Component {
-	render() {
-		return (
-			<BreadcrumbRoute />
-		)
-	}
+export const AppBreadcrumb = () => {
+	return <BreadcrumbRoute />
 }
 
 export default AppBreadcrumb

@@ -1,21 +1,19 @@
 import Footer1 from "@/components/footers/Footer1";
 import Header1 from "@/components/headers/Header1";
-import Topbar6 from "@/components/headers/Topbar6";
 import AccountSidebar from "@/components/my-account/AccountSidebar";
 import Link from "next/link";
 import OrderDetails from "@/components/my-account/OrderDetails";
+import InlineTemplateLoader from "@/components/common/InlineTemplateLoader";
 import React, { Suspense } from "react";
 
 export const metadata = {
-  title:
-    "My Account Order Details || Modave - Multipurpose React Nextjs eCommerce Template",
-  description: "Modave - Multipurpose React Nextjs eCommerce Template",
+  title: "주문 상세 || Let’s Dive In",
+  description: "주문 상세 조회",
 };
 
 export default function MyAccountOrdersDetailsPage() {
   return (
     <>
-      <Topbar6 bgColor="bg-main" />
       <Header1 />
       <>
         {/* page-title */}
@@ -26,11 +24,11 @@ export default function MyAccountOrdersDetailsPage() {
           <div className="container-full">
             <div className="row">
               <div className="col-12">
-                <h3 className="heading text-center">My Account</h3>
+                <h3 className="heading text-center">마이페이지</h3>
                 <ul className="breadcrumbs d-flex align-items-center justify-content-center">
                   <li>
                     <Link className="link" href={`/`}>
-                      Homepage
+                      홈
                     </Link>
                   </li>
                   <li>
@@ -38,13 +36,13 @@ export default function MyAccountOrdersDetailsPage() {
                   </li>
                   <li>
                     <a className="link" href="#">
-                      Pages
+                      마이페이지
                     </a>
                   </li>
                   <li>
                     <i className="icon-arrRight" />
                   </li>
-                  <li>My Account</li>
+                  <li>주문 상세</li>
                 </ul>
               </div>
             </div>
@@ -62,7 +60,13 @@ export default function MyAccountOrdersDetailsPage() {
         <div className="container">
           <div className="my-account-wrap">
             <AccountSidebar />
-            <Suspense fallback={<div className="text-center p-4">로딩 중...</div>}>
+            <Suspense
+              fallback={
+                <div className="p-4 d-flex justify-content-center">
+                  <InlineTemplateLoader />
+                </div>
+              }
+            >
               <OrderDetails />
             </Suspense>
           </div>

@@ -46,6 +46,30 @@ public class ProductEntity {
     @Column(nullable = false)
     private String productImageUrl; //상품 이미지
 
+    @Column(nullable = true, length = 100)
+    private String sku;
+
+    @Column(nullable = true, length = 100)
+    private String brandName;
+
+    @Column(nullable = true, length = 1000)
+    private String materialInfo;
+
+    @Column(nullable = true, length = 100)
+    private String originCountry;
+
+    @Column(nullable = true, length = 100)
+    private String manufactureCountry;
+
+    @Column(nullable = true, length = 1000)
+    private String careInstructions;
+
+    @Column(nullable = true, columnDefinition = "TEXT")
+    private String sizeGuideText;
+
+    @Column(nullable = true, columnDefinition = "TEXT")
+    private String sizeGuideJson;
+
     @Column(nullable = false)
     private LocalDateTime productCreatedAt; //상품 생성일
 
@@ -84,6 +108,30 @@ public class ProductEntity {
     @Column(nullable = true)
     private String originalProductImageUrl; // 원본 상품 이미지
 
+    @Column(nullable = true, length = 100)
+    private String originalSku;
+
+    @Column(nullable = true, length = 100)
+    private String originalBrandName;
+
+    @Column(nullable = true, length = 1000)
+    private String originalMaterialInfo;
+
+    @Column(nullable = true, length = 100)
+    private String originalOriginCountry;
+
+    @Column(nullable = true, length = 100)
+    private String originalManufactureCountry;
+
+    @Column(nullable = true, length = 1000)
+    private String originalCareInstructions;
+
+    @Column(nullable = true, columnDefinition = "TEXT")
+    private String originalSizeGuideText;
+
+    @Column(nullable = true, columnDefinition = "TEXT")
+    private String originalSizeGuideJson;
+
     // 상품 정보 업데이트 메서드
     public void update(
             String productName,
@@ -92,6 +140,14 @@ public class ProductEntity {
             String productPrice,
             String productDescription,
             String productImageUrl,
+            String sku,
+            String brandName,
+            String materialInfo,
+            String originCountry,
+            String manufactureCountry,
+            String careInstructions,
+            String sizeGuideText,
+            String sizeGuideJson,
             ActiveStatus productActiveStatus
     ) {
         // ACTIVE → PENDING_UPDATE로 변경될 때만 원본 데이터 저장
@@ -105,6 +161,14 @@ public class ProductEntity {
                 this.originalProductPrice = this.productPrice;
                 this.originalProductDescription = this.productDescription;
                 this.originalProductImageUrl = this.productImageUrl;
+                this.originalSku = this.sku;
+                this.originalBrandName = this.brandName;
+                this.originalMaterialInfo = this.materialInfo;
+                this.originalOriginCountry = this.originCountry;
+                this.originalManufactureCountry = this.manufactureCountry;
+                this.originalCareInstructions = this.careInstructions;
+                this.originalSizeGuideText = this.sizeGuideText;
+                this.originalSizeGuideJson = this.sizeGuideJson;
             }
         }
         
@@ -114,6 +178,14 @@ public class ProductEntity {
         this.productPrice = productPrice;
         this.productDescription = productDescription;
         this.productImageUrl = productImageUrl;
+        this.sku = sku;
+        this.brandName = brandName;
+        this.materialInfo = materialInfo;
+        this.originCountry = originCountry;
+        this.manufactureCountry = manufactureCountry;
+        this.careInstructions = careInstructions;
+        this.sizeGuideText = sizeGuideText;
+        this.sizeGuideJson = sizeGuideJson;
         this.productActiveStatus = productActiveStatus;
         this.productUpdatedAt = LocalDateTime.now(); // 수정일시 업데이트
     }
@@ -174,6 +246,14 @@ public class ProductEntity {
             this.productPrice = this.originalProductPrice;
             this.productDescription = this.originalProductDescription;
             this.productImageUrl = this.originalProductImageUrl;
+            this.sku = this.originalSku;
+            this.brandName = this.originalBrandName;
+            this.materialInfo = this.originalMaterialInfo;
+            this.originCountry = this.originalOriginCountry;
+            this.manufactureCountry = this.originalManufactureCountry;
+            this.careInstructions = this.originalCareInstructions;
+            this.sizeGuideText = this.originalSizeGuideText;
+            this.sizeGuideJson = this.originalSizeGuideJson;
             
             // 원본 데이터 초기화
             this.originalProductName = null;
@@ -182,6 +262,14 @@ public class ProductEntity {
             this.originalProductPrice = null;
             this.originalProductDescription = null;
             this.originalProductImageUrl = null;
+            this.originalSku = null;
+            this.originalBrandName = null;
+            this.originalMaterialInfo = null;
+            this.originalOriginCountry = null;
+            this.originalManufactureCountry = null;
+            this.originalCareInstructions = null;
+            this.originalSizeGuideText = null;
+            this.originalSizeGuideJson = null;
         }
         this.productActiveStatus = ActiveStatus.ACTIVE; // 원래 ACTIVE 상태로 복구
         this.rejectionReason = rejectionReason; // 거절 사유 저장 (파트너가 확인 가능)
@@ -260,6 +348,14 @@ public class ProductEntity {
                 this.productPrice = this.originalProductPrice;
                 this.productDescription = this.originalProductDescription;
                 this.productImageUrl = this.originalProductImageUrl;
+                this.sku = this.originalSku;
+                this.brandName = this.originalBrandName;
+                this.materialInfo = this.originalMaterialInfo;
+                this.originCountry = this.originalOriginCountry;
+                this.manufactureCountry = this.originalManufactureCountry;
+                this.careInstructions = this.originalCareInstructions;
+                this.sizeGuideText = this.originalSizeGuideText;
+                this.sizeGuideJson = this.originalSizeGuideJson;
                 
                 // 원본 데이터 초기화
                 this.originalProductName = null;
@@ -268,10 +364,22 @@ public class ProductEntity {
                 this.originalProductPrice = null;
                 this.originalProductDescription = null;
                 this.originalProductImageUrl = null;
+                this.originalSku = null;
+                this.originalBrandName = null;
+                this.originalMaterialInfo = null;
+                this.originalOriginCountry = null;
+                this.originalManufactureCountry = null;
+                this.originalCareInstructions = null;
+                this.originalSizeGuideText = null;
+                this.originalSizeGuideJson = null;
             }
             this.productActiveStatus = ActiveStatus.ACTIVE; // 원래 ACTIVE 상태로 복구
             this.rejectionReason = null; // 취소 시 거절 사유 초기화
             this.productUpdatedAt = LocalDateTime.now();
         }
+    }
+
+    public void setSku(String sku) {
+        this.sku = sku;
     }
 }

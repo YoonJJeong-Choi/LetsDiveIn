@@ -3,66 +3,24 @@ import React from "react";
 export default function Shipping() {
   return (
     <>
-      {" "}
       <div className="w-100">
-        <div className="text-btn-uppercase mb_12">We've got your back</div>
+        <div className="text-btn-uppercase mb_12">배송 안내</div>
         <p className="mb_12">
-          One delivery fee to most locations (check our Orders &amp; Delivery
-          page)
+          전 상품 무료배송으로 운영됩니다.
         </p>
-        <p className="">
-          Free returns within 14 days (excludes final sale and made-to-order
-          items, face masks and certain products containing hazardous or
-          flammable materials, such as fragrances and aerosols)
-        </p>
-      </div>
-      <div className="w-100">
-        <div className="text-btn-uppercase mb_12">
-          Import duties information
-        </div>
         <p>
-          Let us handle the legwork. Delivery duties are included in the item
-          price when shipping to all EU countries (excluding the Canary
-          Islands), plus The United Kingdom, USA, Canada, China Mainland,
-          Australia, New Zealand, Puerto Rico, Switzerland, Singapore, Republic
-          Of Korea, Kuwait, Mexico, Qatar, India, Norway, Saudi Arabia, Taiwan
-          Region, Thailand, U.A.E., Japan, Brazil, Isle of Man, San Marino,
-          Colombia, Chile, Argentina, Egypt, Lebanon, Hong Kong SAR, Bahrain and
-          Turkey. All import duties are included in your order – the price you
-          see is the price you pay.
+          도서/산간 일부 지역은 배송일이 추가로 소요될 수 있습니다.
         </p>
       </div>
       <div className="w-100">
-        <div className="text-btn-uppercase mb_12">Estimated delivery</div>
-        <p className="mb_6 font-2">Express: May 10 - May 17</p>
-        <p className="font-2">Sending from USA</p>
+        <div className="text-btn-uppercase mb_12">출고 일정</div>
+        <p>
+          결제 완료 후 영업일 기준 1~3일 내 순차 출고됩니다.
+        </p>
       </div>
       <div className="w-100">
-        <div className="text-btn-uppercase mb_12">Need more information?</div>
-        <div>
-          <a
-            href="#"
-            className="link text-secondary text-decoration-underline mb_6 font-2"
-          >
-            Orders &amp; delivery
-          </a>
-        </div>
-        <div>
-          <a
-            href="#"
-            className="link text-secondary text-decoration-underline mb_6 font-2"
-          >
-            Returns &amp; refunds
-          </a>
-        </div>
-        <div>
-          <a
-            href="#"
-            className="link text-secondary text-decoration-underline font-2"
-          >
-            Duties &amp; taxes
-          </a>
-        </div>
+        <div className="text-btn-uppercase mb_12">고객센터</div>
+        <p>배송 관련 상세 문의는 고객센터를 통해 빠르게 안내해 드립니다.</p>
       </div>
     </>
   );

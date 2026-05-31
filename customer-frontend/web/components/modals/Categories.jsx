@@ -1,5 +1,11 @@
 import React from "react";
-import Image from "next/image";
+import Link from "next/link";
+import { PRODUCT_TYPES, PRODUCT_SUB_TYPES } from "@/data/productTaxonomy";
+import { shopHref } from "@/data/navMain";
+
+function collapseId(value) {
+  return `shopCat-${value.replace(/_/g, "-")}`;
+}
 
 export default function Categories() {
   return (
@@ -10,292 +16,82 @@ export default function Categories() {
       <div className="canvas-wrapper">
         <div className="canvas-header">
           <span className="icon-left icon-filter" />
-          <h5>Categories</h5>
+          <h5>카테고리</h5>
           <span
             className="icon-close icon-close-popup"
             data-bs-dismiss="offcanvas"
-            aria-label="Close"
+            aria-label="닫기"
           />
         </div>
         <div className="canvas-body">
-          <div className="wd-facet-categories">
-            <div
-              role="dialog"
-              className="facet-title collapsed"
-              data-bs-target="#forWomen"
-              data-bs-toggle="collapse"
-              aria-expanded="true"
-              aria-controls="forWomen"
-            >
-              <Image
-                className="avt"
-                alt="avt"
-                src="/images/avatar/women.jpg"
-                width={48}
-                height={48}
-              />
-              <span className="title">For Women</span>
-              <span className="icon icon-arrow-down" />
-            </div>
-            <div id="forWomen" className="collapse">
-              <ul className="facet-body">
-                <li>
-                  <a href="#" className="item link">
-                    <Image
-                      className="avt"
-                      alt="avt"
-                      src="/images/avatar/new-in.jpg"
-                      width={48}
-                      height={48}
-                    />
-                    <span className="title-sub text-caption-1 text-secondary">
-                      New in
-                    </span>
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="item link">
-                    <Image
-                      className="avt"
-                      alt="avt"
-                      src="/images/avatar/promotion.jpg"
-                      width={48}
-                      height={48}
-                    />
-                    <span className="title-sub text-caption-1 text-secondary">
-                      Promotion
-                    </span>
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="item link">
-                    <Image
-                      className="avt"
-                      alt="avt"
-                      src="/images/avatar/clothing.jpg"
-                      width={48}
-                      height={48}
-                    />
-                    <span className="title-sub text-caption-1 text-secondary">
-                      Clothing
-                    </span>
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="item link">
-                    <Image
-                      className="avt"
-                      alt="avt"
-                      src="/images/avatar/shoes.jpg"
-                      width={48}
-                      height={48}
-                    />
-                    <span className="title-sub text-caption-1 text-secondary">
-                      Shoes
-                    </span>
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="item link">
-                    <Image
-                      className="avt"
-                      alt="avt"
-                      src="/images/avatar/bags.jpg"
-                      width={48}
-                      height={48}
-                    />
-                    <span className="title-sub text-caption-1 text-secondary">
-                      Bags
-                    </span>
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="item link">
-                    <Image
-                      className="avt"
-                      alt="avt"
-                      src="/images/avatar/accessories.jpg"
-                      width={48}
-                      height={48}
-                    />
-                    <span className="title-sub text-caption-1 text-secondary">
-                      Accessories
-                    </span>
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="item link">
-                    <Image
-                      className="avt"
-                      alt="avt"
-                      src="/images/avatar/jewelry.jpg"
-                      width={48}
-                      height={48}
-                    />
-                    <span className="title-sub text-caption-1 text-secondary">
-                      Jewelry
-                    </span>
-                  </a>
-                </li>
-              </ul>
-            </div>
-          </div>
-          <div className="wd-facet-categories">
-            <div
-              role="dialog"
-              className="facet-title collapsed"
-              data-bs-target="#forMen"
-              data-bs-toggle="collapse"
-              aria-expanded="true"
-              aria-controls="forMen"
-            >
-              <Image
-                className="avt"
-                alt="avt"
-                src="/images/avatar/men.jpg"
-                width={48}
-                height={48}
-              />
-              <span className="title">For Men</span>
-              <span className="icon icon-arrow-down" />
-            </div>
-            <div id="forMen" className="collapse">
-              <ul className="facet-body">
-                <li>
-                  <a href="#" className="item link">
-                    <Image
-                      className="avt"
-                      alt="avt"
-                      src="/images/avatar/men.jpg"
-                      width={48}
-                      height={48}
-                    />
-                    <span className="title-sub text-caption-1 text-secondary">
-                      Men
-                    </span>
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="item link">
-                    <Image
-                      className="avt"
-                      alt="avt"
-                      src="/images/avatar/men.jpg"
-                      width={48}
-                      height={48}
-                    />
-                    <span className="title-sub text-caption-1 text-secondary">
-                      Men
-                    </span>
-                  </a>
-                </li>
-              </ul>
-            </div>
-          </div>
-          <div className="wd-facet-categories">
-            <div
-              role="dialog"
-              className="facet-title collapsed"
-              data-bs-target="#forKid"
-              data-bs-toggle="collapse"
-              aria-expanded="true"
-              aria-controls="forKid"
-            >
-              <Image
-                className="avt"
-                alt="avt"
-                src="/images/avatar/kid.jpg"
-                width={48}
-                height={48}
-              />
-              <span className="title">For Kid</span>
-              <span className="icon icon-arrow-down" />
-            </div>
-            <div id="forKid" className="collapse">
-              <ul className="facet-body">
-                <li>
-                  <a href="#" className="item link">
-                    <Image
-                      className="avt"
-                      alt="avt"
-                      src="/images/avatar/kid.jpg"
-                      width={48}
-                      height={48}
-                    />
-                    <span className="title-sub text-caption-1 text-secondary">
-                      Kid
-                    </span>
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="item link">
-                    <Image
-                      className="avt"
-                      alt="avt"
-                      src="/images/avatar/kid.jpg"
-                      width={48}
-                      height={48}
-                    />
-                    <span className="title-sub text-caption-1 text-secondary">
-                      Kid
-                    </span>
-                  </a>
-                </li>
-              </ul>
-            </div>
-          </div>
-          <div className="wd-facet-categories">
-            <div
-              role="dialog"
-              className="facet-title collapsed"
-              data-bs-target="#accessories"
-              data-bs-toggle="collapse"
-              aria-expanded="true"
-              aria-controls="accessories"
-            >
-              <Image
-                className="avt"
-                alt="avt"
-                src="/images/avatar/accessories.jpg"
-                width={48}
-                height={48}
-              />
-              <span className="title">Accessories</span>
-              <span className="icon icon-arrow-down" />
-            </div>
-            <div id="accessories" className="collapse">
-              <ul className="facet-body">
-                <li>
-                  <a href="#" className="item link">
-                    <Image
-                      className="avt"
-                      alt="avt"
-                      src="/images/avatar/accessories.jpg"
-                      width={48}
-                      height={48}
-                    />
-                    <span className="title-sub text-caption-1 text-secondary">
-                      Accessories
-                    </span>
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="item link">
-                    <Image
-                      className="avt"
-                      alt="avt"
-                      src="/images/avatar/accessories.jpg"
-                      width={48}
-                      height={48}
-                    />
-                    <span className="title-sub text-caption-1 text-secondary">
-                      Accessories
-                    </span>
-                  </a>
-                </li>
-              </ul>
-            </div>
-          </div>
+          {PRODUCT_TYPES.map((type) => {
+            const subs = PRODUCT_SUB_TYPES[type.value] || [];
+            const hasSubs = subs.length > 0;
+            const cid = collapseId(type.value);
+
+            return (
+              <div className="wd-facet-categories" key={type.value}>
+                <div
+                  role="button"
+                  className="facet-title collapsed"
+                  data-bs-target={`#${cid}`}
+                  data-bs-toggle="collapse"
+                  aria-expanded="false"
+                  aria-controls={cid}
+                >
+                  <span className="title">{type.label}</span>
+                  <span className="icon icon-arrow-down" />
+                </div>
+                <div id={cid} className="collapse">
+                  <ul className="facet-body">
+                    {hasSubs ? (
+                      <>
+                        <li>
+                          <Link
+                            href={shopHref(type.value)}
+                            className="item link"
+                            data-bs-dismiss="offcanvas"
+                            data-bs-target="#shopCategories"
+                          >
+                            <span className="title-sub text-caption-1 text-secondary">
+                              {type.label} 전체
+                            </span>
+                          </Link>
+                        </li>
+                        {subs.map((sub) => (
+                          <li key={sub.value}>
+                            <Link
+                              href={shopHref(type.value, sub.value)}
+                              className="item link"
+                              data-bs-dismiss="offcanvas"
+                              data-bs-target="#shopCategories"
+                            >
+                              <span className="title-sub text-caption-1 text-secondary">
+                                {sub.label}
+                              </span>
+                            </Link>
+                          </li>
+                        ))}
+                      </>
+                    ) : (
+                      <li>
+                        <Link
+                          href={shopHref(type.value)}
+                          className="item link"
+                          data-bs-dismiss="offcanvas"
+                          data-bs-target="#shopCategories"
+                        >
+                          <span className="title-sub text-caption-1 text-secondary">
+                            {type.label} 보기
+                          </span>
+                        </Link>
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

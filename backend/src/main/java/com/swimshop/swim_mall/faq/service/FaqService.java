@@ -10,6 +10,7 @@ import com.swimshop.swim_mall.account.service.AuthService;
 import com.swimshop.swim_mall.admin.entity.AdminEntity;
 import com.swimshop.swim_mall.admin.repository.AdminRepository;
 import com.swimshop.swim_mall.common.enums.AccountRole;
+import com.swimshop.swim_mall.common.enums.InquiryCategory;
 import com.swimshop.swim_mall.common.error.BusinessException;
 import com.swimshop.swim_mall.common.error.ErrorCode;
 import com.swimshop.swim_mall.faq.dto.FaqRequestDto;
@@ -42,23 +43,18 @@ public class FaqService {
         AdminEntity admin = adminRepository.findById(adminId)
             .orElseThrow(() -> new BusinessException(ErrorCode.ADMIN_NOT_FOUND));
         
-        // FAQ 엔티티 생성
+        String categoryCode = resolveCategoryCode(requestDto.getFaqCategory());
+
         FaqEntity faq = FaqEntity.builder()
                 .faqQuestion(requestDto.getFaqQuestion())
                 .faqAnswer(requestDto.getFaqAnswer())
-                .faqCategory(requestDto.getFaqCategory())
+                .faqCategory(categoryCode)
                 .admin(admin)
                 .build();
-        
+
         FaqEntity savedFaq = faqRepository.save(faq);
-        
-        return new FaqResponseDto(
-            savedFaq.getFaqNo(),
-            savedFaq.getFaqQuestion(),
-            savedFaq.getFaqAnswer(),
-            savedFaq.getFaqCategory(),
-            savedFaq.getAdmin().getAdminName()
-        );
+
+        return toResponseDto(savedFaq);
     }
 
     /**
@@ -69,20 +65,13 @@ public class FaqService {
         List<FaqEntity> faqs;
         
         if (category != null && !category.isEmpty()) {
-            faqs = faqRepository.findByFaqCategoryOrderByFaqNoDesc(category);
+            String categoryCode = resolveCategoryCode(category);
+            faqs = faqRepository.findByFaqCategoryOrderByFaqNoDesc(categoryCode);
         } else {
             faqs = faqRepository.findAllByOrderByFaqNoDesc();
         }
-        
-        return faqs.stream()
-            .map(faq -> new FaqResponseDto(
-                faq.getFaqNo(),
-                faq.getFaqQuestion(),
-                faq.getFaqAnswer(),
-                faq.getFaqCategory(),
-                faq.getAdmin().getAdminName()
-            ))
-            .collect(Collectors.toList());
+
+        return faqs.stream().map(this::toResponseDto).collect(Collectors.toList());
     }
 
     /**
@@ -93,13 +82,7 @@ public class FaqService {
         FaqEntity faq = faqRepository.findById(faqNo)
             .orElseThrow(() -> new BusinessException(ErrorCode.FAQ_NOT_FOUND));
         
-        return new FaqResponseDto(
-            faq.getFaqNo(),
-            faq.getFaqQuestion(),
-            faq.getFaqAnswer(),
-            faq.getFaqCategory(),
-            faq.getAdmin().getAdminName()
-        );
+        return toResponseDto(faq);
     }
 
     /**
@@ -116,17 +99,31 @@ public class FaqService {
         faq.update(
             requestDto.getFaqQuestion(),
             requestDto.getFaqAnswer(),
-            requestDto.getFaqCategory()
+            resolveCategoryCode(requestDto.getFaqCategory())
         );
-        
+
         FaqEntity savedFaq = faqRepository.save(faq);
-        
+
+        return toResponseDto(savedFaq);
+    }
+
+    private String resolveCategoryCode(String raw) {
+        try {
+            return InquiryCategory.resolveCode(raw);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "유효하지 않은 FAQ 카테고리입니다");
+        }
+    }
+
+    private FaqResponseDto toResponseDto(FaqEntity faq) {
+        InquiryCategory category = InquiryCategory.fromStored(faq.getFaqCategory());
         return new FaqResponseDto(
-            savedFaq.getFaqNo(),
-            savedFaq.getFaqQuestion(),
-            savedFaq.getFaqAnswer(),
-            savedFaq.getFaqCategory(),
-            savedFaq.getAdmin().getAdminName()
+            faq.getFaqNo(),
+            faq.getFaqQuestion(),
+            faq.getFaqAnswer(),
+            category.name(),
+            category.getLabel(),
+            faq.getAdmin().getAdminName()
         );
     }
 

@@ -1,7 +1,9 @@
 package com.swimshop.swim_mall.review.controller;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.swimshop.swim_mall.common.response.ApiResponse;
 import com.swimshop.swim_mall.common.response.PagedResponse;
+import com.swimshop.swim_mall.review.dto.PartnerReviewAiCandidatesResponse;
 import com.swimshop.swim_mall.review.dto.ReviewReplyRequestDto;
 import com.swimshop.swim_mall.review.dto.ReviewRequestDto;
 import com.swimshop.swim_mall.review.dto.ReviewResponseDto;
@@ -163,6 +166,32 @@ public class ReviewController {
     ) {
         PagedResponse<ReviewResponseDto> reviews = reviewService.getAllReviews(session, page, size);
         return ResponseEntity.ok(ApiResponse.success(reviews));
+    }
+
+    /**
+     * 파트너 리뷰 AI 분석용 후보 목록 (상품·옵션·기간 기준 최신 N건, DB 직접 조회)
+     * GET /api/reviews/partner/ai-candidates
+     */
+    @GetMapping("/partner/ai-candidates")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> getPartnerReviewAiCandidates(
+            HttpSession session,
+            @RequestParam Long productNo,
+            @RequestParam(required = false) List<Long> optionNos,
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fromAt,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime toAt) {
+        PartnerReviewAiCandidatesResponse res = reviewService.getPartnerReviewAiCandidates(
+                session, productNo, optionNos, limit, fromAt, toAt);
+        java.util.Map<String, Object> body = new java.util.HashMap<>();
+        body.put("reviews", res.getReviews());
+        java.util.Map<String, Object> meta = new java.util.HashMap<>();
+        meta.put("recentCountDefault", res.getRecentCountDefault());
+        meta.put("minimumRequired", res.getMinimumRequired());
+        meta.put("hardCap", res.getHardCap());
+        meta.put("requestedLimit", res.getRequestedLimit());
+        meta.put("poolScanned", res.getPoolScanned());
+        body.put("meta", meta);
+        return ResponseEntity.ok(ApiResponse.success(body));
     }
 
     /**

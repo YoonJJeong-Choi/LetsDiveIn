@@ -1,33 +1,27 @@
 import React, { useEffect } from 'react';
 import { connect } from 'react-redux';
-import { Button, Form, Input, Divider, Alert } from 'antd';
+import { Button, Form, Input, Alert } from 'antd';
 import { MailOutlined, LockOutlined } from '@ant-design/icons';
 import PropTypes from 'prop-types';
-import { GoogleSVG, FacebookSVG } from 'assets/svg/icon';
-import CustomIcon from 'components/util-components/CustomIcon'
 import { 
 	signIn, 
 	showLoading, 
 	showAuthMessage, 
 	hideAuthMessage, 
-	signInWithGoogle, 
-	signInWithFacebook 
 } from 'store/slices/authSlice';
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { motion } from "framer-motion"
 
 export const LoginForm = props => {
 	
 	const navigate = useNavigate();
+	const location = useLocation();
 
 	const { 
-		otherSignIn, 
 		showForgetPassword, 
 		hideAuthMessage,
 		onForgetPasswordClick,
 		showLoading,
-		signInWithGoogle,
-		signInWithFacebook,
 		extra, 
 		signIn, 
 		token, 
@@ -38,6 +32,21 @@ export const LoginForm = props => {
 		allowRedirect = true
 	} = props
 
+	const authReason = new URLSearchParams(location.search).get('reason');
+	const portalNotice = authReason === 'portal'
+		? {
+			type: 'warning',
+			message: '현재 고객 계정으로 로그인되어 있습니다.',
+			description: '관리자 페이지는 관리자 또는 파트너 계정만 이용할 수 있습니다. 해당 계정으로 다시 로그인해주세요.'
+		}
+		: authReason === 'expired'
+			? {
+				type: 'info',
+				message: '로그인이 만료되었거나 해제되었습니다.',
+				description: '관리자 또는 파트너 계정으로 다시 로그인해주세요.'
+			}
+			: null;
+
 	const initialCredential = {
 		email: 'user1@themenate.net',
 		password: '2005ipo'
@@ -47,16 +56,6 @@ export const LoginForm = props => {
 		showLoading()
 		signIn(values);
 	};
-
-	const onGoogleLogin = () => {
-		showLoading()
-		signInWithGoogle()
-	}
-
-	const onFacebookLogin = () => {
-		showLoading()
-		signInWithFacebook()
-	}
 
 	useEffect(() => {
 		if (token !== null && allowRedirect) {
@@ -72,34 +71,20 @@ export const LoginForm = props => {
 			};
 		}
 	}, [showMessage, hideAuthMessage]);
-	
-	const renderOtherSignIn = (
-		<div>
-			<Divider>
-				<span className="text-muted font-size-base font-weight-normal">or connect with</span>
-			</Divider>
-			<div className="d-flex justify-content-center">
-				<Button 
-					onClick={() => onGoogleLogin()} 
-					className="mr-2" 
-					disabled={loading} 
-					icon={<CustomIcon svg={GoogleSVG}/>}
-				>
-					Google
-				</Button>
-				<Button 
-					onClick={() => onFacebookLogin()} 
-					icon={<CustomIcon svg={FacebookSVG}/>}
-					disabled={loading} 
-				>
-					Facebook
-				</Button>
-			</div>
-		</div>
-	)
 
 	return (
 		<>
+			{
+				portalNotice && (
+					<Alert
+						type={portalNotice.type}
+						showIcon
+						className="mb-3"
+						message={portalNotice.message}
+						description={portalNotice.description}
+					/>
+				)
+			}
 			<motion.div 
 				initial={{ opacity: 0, marginBottom: 0 }} 
 				animate={{ 
@@ -116,15 +101,15 @@ export const LoginForm = props => {
 			>
 				<Form.Item 
 					name="email" 
-					label="Email" 
+					label="이메일" 
 					rules={[
 						{ 
 							required: true,
-							message: 'Please input your email',
+							message: '이메일을 입력해 주세요.',
 						},
 						{ 
 							type: 'email',
-							message: 'Please enter a validate email!'
+							message: '올바른 이메일 형식을 입력해 주세요.'
 						}
 					]}>
 					<Input prefix={<MailOutlined className="text-primary" />}/>
@@ -133,14 +118,14 @@ export const LoginForm = props => {
 					name="password" 
 					label={
 						<div className={`${showForgetPassword? 'd-flex justify-content-between w-100 align-items-center' : ''}`}>
-							<span>Password</span>
-							{
+							<span>비밀번호</span>
+								{
 								showForgetPassword && 
 								<span 
 									onClick={() => onForgetPasswordClick} 
 									className="cursor-pointer font-size-sm font-weight-normal text-muted"
 								>
-									Forget Password?
+									비밀번호 찾기
 								</span>
 							} 
 						</div>
@@ -148,7 +133,7 @@ export const LoginForm = props => {
 					rules={[
 						{ 
 							required: true,
-							message: 'Please input your password',
+							message: '비밀번호를 입력해 주세요.',
 						}
 					]}
 				>
@@ -156,12 +141,9 @@ export const LoginForm = props => {
 				</Form.Item>
 				<Form.Item>
 					<Button type="primary" htmlType="submit" block loading={loading}>
-						Sign In
+						로그인
 					</Button>
 				</Form.Item>
-				{
-					otherSignIn ? renderOtherSignIn : null
-				}
 				{ extra }
 			</Form>
 		</>
@@ -169,7 +151,6 @@ export const LoginForm = props => {
 }
 
 LoginForm.propTypes = {
-	otherSignIn: PropTypes.bool,
 	showForgetPassword: PropTypes.bool,
 	extra: PropTypes.oneOfType([
 		PropTypes.string,
@@ -178,7 +159,6 @@ LoginForm.propTypes = {
 };
 
 LoginForm.defaultProps = {
-	otherSignIn: true,
 	showForgetPassword: false
 };
 
@@ -192,8 +172,6 @@ const mapDispatchToProps = {
 	showAuthMessage,
 	showLoading,
 	hideAuthMessage,
-	signInWithGoogle,
-	signInWithFacebook
 }
 
 export default connect(mapStateToProps, mapDispatchToProps)(LoginForm)

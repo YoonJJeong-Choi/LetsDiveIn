@@ -113,6 +113,27 @@ public class SettlementService {
                 .summary(summary)
                 .build();
     }
+
+    /**
+     * 파트너 정산 대상(정산 준비 완료) 합계만 — 대시보드 등 경량 조회용
+     */
+    @Transactional(readOnly = true)
+    public SettlementSummaryDto getPartnerSettlementReadySummary(HttpSession session) {
+        authService.requireRole(session, AccountRole.PARTNER);
+        AuthLoginResponseDto currentUser = authService.getCurrentUser(session);
+        Long partnerId = currentUser.getSubjectId();
+        partnerRepository.findById(partnerId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PARTNER_NOT_FOUND));
+
+        List<OrderItemEntity> orderItems = findSettlementReadyOrderItems(partnerId, null, null);
+        List<SettlementItemDto> items = orderItems.stream()
+                .map(this::toSettlementItemDto)
+                .collect(Collectors.toList());
+        items = items.stream()
+                .filter(SettlementItemDto::getIsSettlementReady)
+                .collect(Collectors.toList());
+        return calculateSummary(items);
+    }
     
     /**
      * 정산 대상 주문 아이템 조회

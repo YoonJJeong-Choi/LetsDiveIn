@@ -7,26 +7,34 @@ import { useRouter } from "next/navigation";
 import CartLength from "../common/CartLength";
 import { getMe, logout as authLogout } from "@/lib/api/auth";
 import { useContextElement } from "@/context/Context";
+import { STORE_EMAIL, STORE_PHONE_DISPLAY } from "@/data/storeContact";
 
 export default function Header1({ fullWidth = false }) {
   const router = useRouter();
   const [user, setUser] = useState(null);
-  const { setCartProducts, setIsLoggedIn } = useContextElement();
+  const { syncCartForLogout } = useContextElement();
 
   useEffect(() => {
-    getMe().then(setUser);
+    getMe()
+      .then(setUser)
+      .catch(() => setUser(null));
   }, []);
 
   const handleLogout = async () => {
-    await authLogout();
-    setUser(null);
-    setIsLoggedIn(false);
-    // 장바구니 초기화
-    setCartProducts([]);
-    // localStorage도 초기화
-    localStorage.removeItem("cartList");
-    router.push("/");
-    router.refresh();
+    try {
+      await authLogout();
+    } catch (e) {
+      // 서버 로그아웃 실패여도 프론트 상태는 정리
+    } finally {
+      setUser(null);
+      syncCartForLogout();
+      if (typeof window !== "undefined") {
+        window.location.href = "/";
+      } else {
+        router.push("/");
+        router.refresh();
+      }
+    }
   };
   return (
     <header
@@ -50,7 +58,7 @@ export default function Header1({ fullWidth = false }) {
               <Image
                 alt="logo"
                 className="logo"
-                src="/images/logo/logo.svg"
+                src="/images/logo/LetsDiveIn03.png"
                 width={144}
                 height={25}
               />
@@ -127,45 +135,31 @@ export default function Header1({ fullWidth = false }) {
                     {user ? (
                       <>
                         <p className="text-center mb-2">안녕하세요, <strong>{user.name}</strong>님</p>
-                        <Link href={`/my-account`} className="tf-btn btn-reset d-block mb-2">마이페이지</Link>
+                        <Link href={`/my-account`} className="tf-btn btn-reset d-block mb-2 text-center">마이페이지</Link>
                         <button type="button" className="tf-btn btn-reset w-100" onClick={handleLogout}>로그아웃</button>
                       </>
                     ) : (
                       <>
                         <Link href={`/login`} className="tf-btn btn-reset">
-                          Login
+                          로그인
                         </Link>
                     <p className="text-center text-secondary-2 mb-0">
-                      Don’t have an account?{" "}
-                      <Link href={`/register`}>Register</Link>
+                      계정이 없으신가요?{" "}
+                      <Link href={`/register`}>회원가입</Link>
                     </p>
                       </>
                     )}
                   </div>
                   <div className="sub-bot">
-                    <span className="body-text-">Support</span>
+                    <span className="body-text-">고객센터</span>
+                    <p className="text-secondary-2 mb-0" style={{ fontSize: "12px", marginTop: "6px" }}>
+                      전화: {STORE_PHONE_DISPLAY}
+                    </p>
+                    <p className="text-secondary-2 mb-0" style={{ fontSize: "12px" }}>
+                      이메일: {STORE_EMAIL}
+                    </p>
                   </div>
                 </div>
-              </li>
-              <li className="nav-wishlist">
-                <Link href={`/wish-list`} className="nav-icon-item">
-                  <svg
-                    className="icon"
-                    width={24}
-                    height={24}
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      d="M20.8401 4.60987C20.3294 4.09888 19.7229 3.69352 19.0555 3.41696C18.388 3.14039 17.6726 2.99805 16.9501 2.99805C16.2276 2.99805 15.5122 3.14039 14.8448 3.41696C14.1773 3.69352 13.5709 4.09888 13.0601 4.60987L12.0001 5.66987L10.9401 4.60987C9.90843 3.57818 8.50915 2.99858 7.05012 2.99858C5.59109 2.99858 4.19181 3.57818 3.16012 4.60987C2.12843 5.64156 1.54883 7.04084 1.54883 8.49987C1.54883 9.95891 2.12843 11.3582 3.16012 12.3899L4.22012 13.4499L12.0001 21.2299L19.7801 13.4499L20.8401 12.3899C21.3511 11.8791 21.7565 11.2727 22.033 10.6052C22.3096 9.93777 22.4519 9.22236 22.4519 8.49987C22.4519 7.77738 22.3096 7.06198 22.033 6.39452C21.7565 5.72706 21.3511 5.12063 20.8401 4.60987V4.60987Z"
-                      stroke="#181818"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </Link>
               </li>
               <li className="nav-cart">
                 <a

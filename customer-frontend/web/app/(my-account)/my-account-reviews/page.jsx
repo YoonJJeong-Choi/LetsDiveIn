@@ -1,20 +1,18 @@
 import Footer1 from "@/components/footers/Footer1";
 import Header1 from "@/components/headers/Header1";
-import Topbar6 from "@/components/headers/Topbar6";
 import AccountSidebar from "@/components/my-account/AccountSidebar";
 import ReviewsList from "@/components/my-account/ReviewsList";
 import Link from "next/link";
 import React from "react";
 
 export const metadata = {
-  title: "My Reviews || Modave - Multipurpose React Nextjs eCommerce Template",
-  description: "Modave - Multipurpose React Nextjs eCommerce Template",
+  title: "내 리뷰 || Let’s Dive In",
+  description: "내 리뷰 관리",
 };
 
 export default function MyReviewsPage() {
   return (
     <>
-      <Topbar6 bgColor="bg-main" />
       <Header1 />
       <>
         {/* page-title */}
@@ -25,11 +23,11 @@ export default function MyReviewsPage() {
           <div className="container-full">
             <div className="row">
               <div className="col-12">
-                <h3 className="heading text-center">My Reviews</h3>
+                <h3 className="heading text-center">내 리뷰</h3>
                 <ul className="breadcrumbs d-flex align-items-center justify-content-center">
                   <li>
                     <Link className="link" href={`/`}>
-                      Homepage
+                      홈
                     </Link>
                   </li>
                   <li>
@@ -37,13 +35,13 @@ export default function MyReviewsPage() {
                   </li>
                   <li>
                     <a className="link" href="#">
-                      Pages
+                      마이페이지
                     </a>
                   </li>
                   <li>
                     <i className="icon-arrRight" />
                   </li>
-                  <li>My Reviews</li>
+                  <li>내 리뷰</li>
                 </ul>
               </div>
             </div>

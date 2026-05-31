@@ -4,18 +4,18 @@ import LayoutHandler from "./LayoutHandler";
 import Sorting from "./Sorting";
 import Listview from "./Listview";
 import GridView from "./GridView";
-import { useEffect, useReducer, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import FilterModal from "./FilterModal";
 import Pagination from "@/components/common/Pagination";
 import { initialState, reducer } from "@/reducer/filterReducer";
-import { productMain } from "@/data/products";
 import FilterMeta from "./FilterMeta";
 import FilterSidebar from "./FilterSidebar";
 import { getActiveProductList, searchProducts } from "@/lib/api/product";
-import { getApplicableSale } from "@/lib/api/sale";
+import { mapApiProductToCard } from "@/lib/product/mapApiProductToCard";
 import { getActiveBrands } from "@/lib/api/brand";
 import { getActiveSizes } from "@/lib/api/size";
+import InlineTemplateLoader from "@/components/common/InlineTemplateLoader";
 
 export default function Products12() {
   const sp = useSearchParams();
@@ -45,76 +45,6 @@ export default function Products12() {
   } = state;
   const [totalProducts, setTotalProducts] = useState(0);
 
-  const calculateDiscountAmount = (salePolicy, basePrice) => {
-    if (!salePolicy || !salePolicy.discountType || salePolicy.discountValue == null) return 0;
-    if (!basePrice || basePrice <= 0) return 0;
-
-    const type = salePolicy.discountType;
-    const value = Number(salePolicy.discountValue || 0);
-    const maxDiscountAmount =
-      salePolicy.maxDiscountAmount != null ? Number(salePolicy.maxDiscountAmount) : null;
-
-    let discount = 0;
-    if (type === "PERCENT") {
-      discount = (basePrice * value) / 100;
-    } else {
-      discount = value;
-    }
-    if (discount <= 0) return 0;
-    if (maxDiscountAmount != null && maxDiscountAmount > 0) {
-      discount = Math.min(discount, maxDiscountAmount);
-    }
-    return Math.min(basePrice, Math.max(0, discount));
-  };
-
-  // 백엔드 DTO를 프론트엔드 형식으로 변환 + 적용 세일 반영
-  const mapProductToFrontend = async (product) => {
-    // 옵션에서 사이즈 추출 (color와 size 필드 직접 사용)
-    const sizes = product.options?.map(opt => opt.size).filter(Boolean) || [];
-
-    // 옵션에서 색상 추출 (color와 size 필드 직접 사용)
-    const colors = product.options?.map(opt => opt.color).filter(Boolean) || [];
-
-    const basePrice = product.minPrice ? product.minPrice : parseFloat(product.productPrice) || 0;
-    let salePolicy = null;
-    try {
-      const saleResult = await getApplicableSale({
-        productNo: product.productNo,
-        optionNo: null,
-      });
-      salePolicy = saleResult?.data ?? saleResult;
-    } catch (e) {
-      salePolicy = null;
-    }
-    const discountAmount = calculateDiscountAmount(salePolicy, basePrice);
-    const salePrice = Math.max(0, basePrice - discountAmount);
-    const hasSale = discountAmount > 0 && salePrice < basePrice;
-
-    return {
-      id: product.productNo,
-      title: product.productName,
-      price: hasSale ? salePrice : basePrice,
-      oldPrice: hasSale ? basePrice : null,
-      imgSrc: product.productImageUrl || "/images/products/womens/women-19.jpg",
-      imgHover: product.productImageUrl || "/images/products/womens/women-19.jpg",
-      isOnSale: hasSale,
-      inStock: true,
-      filterBrands: [], // 나중에 파트너 정보로 채울 수 있음
-      filterColor: colors,
-      filterSizes: sizes,
-      tabFilterOptions: product.productType ? [product.productType] : [],
-      tabFilterOptions2: [],
-      // 추가 필드
-      productNo: product.productNo,
-      productType: product.productType,
-      productSubType: product.productSubType,
-      productDescription: product.productDescription,
-      options: product.options || [],
-      minPrice: product.minPrice,
-      maxPrice: product.maxPrice,
-    };
-  };
-
   // 검색/필터링 파라미터 상태 (실제 API 호출에 사용)
   const [searchParams, setSearchParams] = useState({
     keyword: null,
@@ -124,6 +54,10 @@ export default function Products12() {
     maxPrice: null,
     optionName: null,
     partnerBrandCode: null,
+    saleOnly: false,
+    inStock: null,
+    sortBy: "latest",
+    sortDir: "desc",
   });
 
   const [expandedProductType, setExpandedProductType] = useState(null);
@@ -158,6 +92,13 @@ export default function Products12() {
           maxPrice: searchParams.maxPrice || null,
           optionName: searchParams.optionName || null,
           partnerBrandCode: searchParams.partnerBrandCode || null,
+          saleOnly: Boolean(searchParams.saleOnly),
+          inStock:
+            searchParams.inStock === null || searchParams.inStock === undefined
+              ? null
+              : Boolean(searchParams.inStock),
+          sortBy: searchParams.sortBy || "latest",
+          sortDir: searchParams.sortDir || "desc",
         };
         
         // 검색 파라미터가 하나라도 있으면 searchProducts 사용, 없으면 getActiveProductList 사용
@@ -173,7 +114,7 @@ export default function Products12() {
         const total = meta?.total || 0;
         setTotalProducts(Number(total) || 0);
 
-        const mappedProducts = await Promise.all(dataItems.map(mapProductToFrontend));
+        const mappedProducts = await Promise.all(dataItems.map(mapApiProductToCard));
         setProducts(mappedProducts);
         
         // 초기 로드 시 가격 필터 범위 설정 (0원 ~ 100만원)
@@ -256,6 +197,25 @@ export default function Products12() {
       partnerBrandCode: nextPartnerBrandCode,
     }));
   }, [color, size, brands]);
+
+  useEffect(() => {
+    setSearchParams((prev) => {
+      const nextSaleOnly = Boolean(activeFilterOnSale);
+      if (prev.saleOnly === nextSaleOnly) return prev;
+      return { ...prev, saleOnly: nextSaleOnly };
+    });
+  }, [activeFilterOnSale]);
+
+  useEffect(() => {
+    const nextInStock =
+      availability !== "All" && availability?.value !== undefined
+        ? Boolean(availability.value)
+        : null;
+    setSearchParams((prev) => {
+      if (prev.inStock === nextInStock) return prev;
+      return { ...prev, inStock: nextInStock };
+    });
+  }, [availability]);
 
   const allProps = {
     ...state,
@@ -357,14 +317,6 @@ export default function Products12() {
 
     // 브랜드는 백엔드 partnerBrandCode 필터로 처리함
     
-    // 재고 상태 필터 (클라이언트 사이드)
-    if (availability !== "All") {
-      const filteredByavailability = [...currentProducts].filter(
-        (elm) => availability.value === elm.inStock
-      );
-      filteredArrays = [...filteredArrays, filteredByavailability];
-    }
-    
     // 색상 필터 (클라이언트 사이드) - 옵션명에서 추출한 색상으로 필터링
     if (color !== "All") {
       const filteredByColor = [...currentProducts].filter((elm) =>
@@ -381,12 +333,6 @@ export default function Products12() {
       filteredArrays = [...filteredArrays, filteredBysize];
     }
     
-    // 할인 상품 필터 (클라이언트 사이드)
-    if (activeFilterOnSale) {
-      const filteredByonSale = [...currentProducts].filter((elm) => elm.oldPrice);
-      filteredArrays = [...filteredArrays, filteredByonSale];
-    }
-
     // 가격 필터는 백엔드에서 처리하므로 클라이언트 사이드 필터링 제거
     // (백엔드 API에서 이미 가격 필터링된 결과를 받음)
 
@@ -398,47 +344,37 @@ export default function Products12() {
       : currentProducts; // 필터가 없으면 전체 상품
     
     dispatch({ type: "SET_FILTERED", payload: commonItems });
-  }, [availability, color, size, brands, activeFilterOnSale, products]); // price 제거 (백엔드에서 처리)
+  }, [color, size, brands, activeFilterOnSale, products]); // price/availability 제거 (백엔드에서 처리)
+
+  const prevSearchParamsRef = useRef(searchParams);
+  useEffect(() => {
+    dispatch({ type: "SET_SORTED", payload: filtered || [] });
+    const paramsChanged = prevSearchParamsRef.current !== searchParams;
+    if (paramsChanged) {
+      dispatch({ type: "SET_CURRENT_PAGE", payload: 1 });
+      prevSearchParamsRef.current = searchParams;
+    }
+  }, [filtered, sortingOption, searchParams]);
 
   useEffect(() => {
-    if (!filtered || filtered.length === 0) {
-      dispatch({ type: "SET_SORTED", payload: [] });
-      return;
-    }
-
-    if (sortingOption === "Price Ascending") {
-      dispatch({
-        type: "SET_SORTED",
-        payload: [...filtered].sort((a, b) => a.price - b.price),
-      });
-    } else if (sortingOption === "Price Descending") {
-      dispatch({
-        type: "SET_SORTED",
-        payload: [...filtered].sort((a, b) => b.price - a.price),
-      });
-    } else if (sortingOption === "Title Ascending") {
-      dispatch({
-        type: "SET_SORTED",
-        payload: [...filtered].sort((a, b) => a.title.localeCompare(b.title)),
-      });
-    } else if (sortingOption === "Title Descending") {
-      dispatch({
-        type: "SET_SORTED",
-        payload: [...filtered].sort((a, b) => b.title.localeCompare(a.title)),
-      });
-    } else {
-      dispatch({ type: "SET_SORTED", payload: filtered });
-    }
-    dispatch({ type: "SET_CURRENT_PAGE", payload: 1 });
-  }, [filtered, sortingOption]);
+    const sortMap = {
+      "신상품순": { sortBy: "latest", sortDir: "desc" },
+      "인기순": { sortBy: "popularity", sortDir: "desc" },
+      "가격 낮은순": { sortBy: "price", sortDir: "asc" },
+      "가격 높은순": { sortBy: "price", sortDir: "desc" },
+    };
+    const next = sortMap[sortingOption] || sortMap["신상품순"];
+    setSearchParams((prev) => {
+      if (prev.sortBy === next.sortBy && prev.sortDir === next.sortDir) return prev;
+      return { ...prev, ...next };
+    });
+  }, [sortingOption]);
 
   if (loading) {
     return (
       <section className="flat-spacing">
-        <div className="container">
-          <div className="text-center py-5">
-            <p>상품 목록을 불러오는 중...</p>
-          </div>
+        <div className="container py-5 d-flex justify-content-center">
+          <InlineTemplateLoader />
         </div>
       </section>
     );
@@ -463,20 +399,6 @@ export default function Products12() {
         <div className="container">
           <div className="tf-shop-control">
             <div className="tf-control-filter">
-              <button className="filterShop tf-btn-filter hidden-mx-1200">
-                <span className="icon icon-filter" />
-                <span className="text">필터</span>
-              </button>
-
-              <a
-                href="#filterShop"
-                data-bs-toggle="offcanvas"
-                aria-controls="filterShop"
-                className="tf-btn-filter show-mx-1200"
-              >
-                <span className="icon icon-filter" />
-                <span className="text">필터</span>
-              </a>
               <div
                 onClick={allProps.toggleFilterWithOnSale}
                 className={`d-none d-lg-flex shop-sale-text ${
@@ -484,7 +406,7 @@ export default function Products12() {
                 }`}
               >
                 <i className="icon icon-checkCircle" />
-                <p className="text-caption-1">세일 상품만</p>
+                <p className="text-caption-1">세일 상품</p>
               </div>
             </div>
             <ul className="tf-control-layout">
@@ -505,14 +427,14 @@ export default function Products12() {
               <div className="col-xl-9">
                 {activeLayout == 1 ? (
                   <div className="tf-list-layout wrapper-shop" id="listLayout">
-                    <Listview products={sorted} pagination={false} />
+                    <Listview products={sorted} />
                   </div>
                 ) : (
                   <div
                     className={`tf-grid-layout wrapper-shop tf-col-${activeLayout}`}
                     id="gridLayout"
                   >
-                    <GridView products={sorted} pagination={false} />
+                    <GridView products={sorted} />
                   </div>
                 )}
               </div>{" "}

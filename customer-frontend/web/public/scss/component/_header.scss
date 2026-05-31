@@ -71,10 +71,6 @@
     align-items: center;
     justify-content: flex-end;
     gap: 16px;
-    .tf-currencies {
-      padding-right: 20px;
-      border-right: 1px solid var(--line);
-    }
   }
 
   .header-bottom {
@@ -1062,14 +1058,6 @@
 .header-style-4 {
   .main-header .wrapper-header {
     padding-bottom: 26px;
-  }
-  .wrapper-header-right {
-    .tf-currencies {
-      padding-right: 17px;
-    }
-    .image-select.style-default > .dropdown-toggle {
-      padding-right: 27px;
-    }
   }
 }
 .header-style-5 {

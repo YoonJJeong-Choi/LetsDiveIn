@@ -23,11 +23,6 @@ export const signIn = createAsyncThunk('auth/signIn',async (data, { rejectWithVa
 	}
 })
 
-// signUp은 현재 사용하지 않음 (백엔드에서 별도 회원가입 API 사용)
-export const signUp = createAsyncThunk('auth/signUp',async (data, { rejectWithValue }) => {
-	return rejectWithValue('회원가입은 별도 페이지에서 진행해주세요.')
-})
-
 export const signOut = createAsyncThunk('auth/signOut',async (_, { rejectWithValue }) => {
 	try {
 		await AuthService.logout()
@@ -48,16 +43,6 @@ export const checkAuth = createAsyncThunk('auth/checkAuth', async (_, { rejectWi
 		return rejectWithValue(null) // 인증되지 않음
 	}
 })
-
-// Firebase 소셜 로그인은 비활성화 (백엔드에서 지원하지 않음)
-export const signInWithGoogle = createAsyncThunk('auth/signInWithGoogle', async (_, { rejectWithValue }) => {
-	return rejectWithValue('Google 로그인은 현재 지원하지 않습니다.')
-})
-
-export const signInWithFacebook = createAsyncThunk('auth/signInWithFacebook', async (_, { rejectWithValue }) => {
-	return rejectWithValue('Facebook 로그인은 현재 지원하지 않습니다.')
-})
-
 
 export const authSlice = createSlice({
 	name: 'auth',
@@ -123,45 +108,6 @@ export const authSlice = createSlice({
 				state.loading = false
 				state.token = null
 				state.redirect = '/'
-			})
-			.addCase(signUp.pending, (state) => {
-				state.loading = true
-			})
-			.addCase(signUp.fulfilled, (state, action) => {
-				state.loading = false
-				state.redirect = '/'
-				state.token = action.payload
-			})
-			.addCase(signUp.rejected, (state, action) => {
-				state.message = action.payload
-				state.showMessage = true
-				state.loading = false
-			})
-			.addCase(signInWithGoogle.pending, (state) => {
-				state.loading = true
-			})
-			.addCase(signInWithGoogle.fulfilled, (state, action) => {
-				state.loading = false
-				state.redirect = '/'
-				state.token = action.payload
-			})
-			.addCase(signInWithGoogle.rejected, (state, action) => {
-				state.message = action.payload
-				state.showMessage = true
-				state.loading = false
-			})
-			.addCase(signInWithFacebook.pending, (state) => {
-				state.loading = true
-			})
-			.addCase(signInWithFacebook.fulfilled, (state, action) => {
-				state.loading = false
-				state.redirect = '/'
-				state.token = action.payload
-			})
-			.addCase(signInWithFacebook.rejected, (state, action) => {
-				state.message = action.payload
-				state.showMessage = true
-				state.loading = false
 			})
 			.addCase(checkAuth.fulfilled, (state, action) => {
 				state.token = action.payload.token

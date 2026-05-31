@@ -1,8 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Table, Button, Modal, Input, Form, message, Tag, Space, Row, Col, Alert, Statistic, Select } from 'antd';
-import { CarOutlined, CheckCircleOutlined, EditOutlined, InfoCircleOutlined, ShoppingCartOutlined, LinkOutlined } from '@ant-design/icons';
+import {
+	Card,
+	Table,
+	Button,
+	Modal,
+	Input,
+	Form,
+	message,
+	Tag,
+	Space,
+	Row,
+	Col,
+	Alert,
+	Statistic,
+	Select,
+	Menu,
+	Typography,
+	Descriptions,
+} from 'antd';
+import {
+	CarOutlined,
+	CheckCircleOutlined,
+	EditOutlined,
+	InfoCircleOutlined,
+	ShoppingCartOutlined,
+	LinkOutlined,
+} from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import DeliveryService from 'services/DeliveryService';
+import EllipsisDropdown from 'components/shared-components/EllipsisDropdown';
 
 const { Option } = Select;
 
@@ -77,6 +103,8 @@ const DeliveryManagement = () => {
 	const [editingDelivery, setEditingDelivery] = useState(null);
 	const [form] = Form.useForm();
 	const [statusFilter, setStatusFilter] = useState('ALL'); // ALL, READY, SHIPPED, DELIVERED
+	const [detailModalVisible, setDetailModalVisible] = useState(false);
+	const [detailRecord, setDetailRecord] = useState(null);
 
 	useEffect(() => {
 		fetchAllDeliveries();
@@ -214,104 +242,113 @@ const DeliveryManagement = () => {
 		}
 	};
 
+	const openDetailModal = (record) => {
+		setDetailRecord(record);
+		setDetailModalVisible(true);
+	};
+
+	const closeDetailModal = () => {
+		setDetailModalVisible(false);
+		setDetailRecord(null);
+	};
+
+	const buildRowMenu = (record) => (
+		<Menu>
+			{record.orderNo ? (
+				<Menu.Item key="order" onClick={() => handleGoToOrder(record.orderNo)}>
+					<Space>
+						<LinkOutlined />
+						<span>주문 보기</span>
+					</Space>
+				</Menu.Item>
+			) : null}
+			<Menu.Item key="detail" onClick={() => openDetailModal(record)}>
+				상세 정보
+			</Menu.Item>
+			{record.deliveryStatus === 'SHIPPED' ? (
+				<Menu.Item key="edit" onClick={() => openUpdateModal(record)}>
+					<Space>
+						<EditOutlined />
+						<span>송장·택배 수정</span>
+					</Space>
+				</Menu.Item>
+			) : null}
+		</Menu>
+	);
+
 	const tableColumns = [
-		{
-			title: '배송 번호',
-			dataIndex: 'deliveryNo',
-			key: 'deliveryNo',
-		},
 		{
 			title: '주문 번호',
 			dataIndex: 'orderNo',
 			key: 'orderNo',
-			render: (text, record) => (
+			width: 140,
+			render: (text) =>
 				text ? (
-					<Space>
-						<span>{text}</span>
-						<Button
-							type="link"
-							size="small"
-							icon={<LinkOutlined />}
-							onClick={() => handleGoToOrder(text)}
-						>
-							주문 보기
-						</Button>
-					</Space>
-				) : '-'
-			),
+					<Typography.Link onClick={() => handleGoToOrder(text)}>{text}</Typography.Link>
+				) : (
+					'-'
+				),
 		},
 		{
-			title: '주문 아이템 번호',
-			dataIndex: 'orderItemNo',
-			key: 'orderItemNo',
-			render: (text) => text || '-',
-		},
-		{
-			title: '상품 정보',
+			title: '상품',
 			key: 'productInfo',
+			ellipsis: true,
 			render: (_, record) => (
 				<div>
-					<div style={{ fontWeight: 'bold' }}>{record.productName || '-'}</div>
-					{record.color && record.size && (
-						<div style={{ fontSize: '12px', color: '#666' }}>
-							{record.color} / {record.size}
+					<div className="font-weight-semibold">{record.productName || '-'}</div>
+					{(record.color || record.size) && (
+						<div className="text-muted font-size-sm">
+							{[record.color, record.size].filter(Boolean).join(' / ')}
 						</div>
 					)}
 				</div>
 			),
 		},
 		{
-			title: '배송 상태',
+			title: '배송',
 			dataIndex: 'deliveryStatus',
 			key: 'deliveryStatus',
+			width: 100,
 			render: (status) => (
-				<Tag color={getDeliveryStatusColor(status)}>
-					{getDeliveryStatusLabel(status)}
-				</Tag>
+				<Tag color={getDeliveryStatusColor(status)}>{getDeliveryStatusLabel(status)}</Tag>
 			),
 		},
 		{
-			title: '반품 상태',
+			title: '반품',
 			dataIndex: 'returnStatus',
 			key: 'returnStatus',
+			width: 110,
 			render: (status) => {
-				if (!status) return '-';
+				if (!status) return <span className="text-muted">-</span>;
+				return <Tag color={getReturnStatusColor(status)}>{getReturnStatusLabel(status)}</Tag>;
+			},
+		},
+		{
+			title: '택배·송장',
+			key: 'courierSummary',
+			width: 200,
+			ellipsis: true,
+			render: (_, record) => {
+				if (!record.deliveryCourier && !record.deliveryTrackingNumber) {
+					return <span className="text-muted">-</span>;
+				}
 				return (
-					<Tag color={getReturnStatusColor(status)}>
-						{getReturnStatusLabel(status)}
-					</Tag>
+					<div>
+						<div>{record.deliveryCourier || '-'}</div>
+						<div className="text-muted font-size-sm text-truncate" style={{ maxWidth: 180 }}>
+							{record.deliveryTrackingNumber || '-'}
+						</div>
+					</div>
 				);
 			},
 		},
 		{
-			title: '택배사',
-			dataIndex: 'deliveryCourier',
-			key: 'deliveryCourier',
-			render: (text) => text || '-',
-		},
-		{
-			title: '송장번호',
-			dataIndex: 'deliveryTrackingNumber',
-			key: 'deliveryTrackingNumber',
-			render: (text) => text || '-',
-		},
-		{
-			title: '배송 시작일',
-			dataIndex: 'deliveryStartDate',
-			key: 'deliveryStartDate',
-			render: (date) => formatDate(date),
-		},
-		{
-			title: '배송 완료일',
-			dataIndex: 'deliveryEndDate',
-			key: 'deliveryEndDate',
-			render: (date) => formatDate(date),
-		},
-		{
-			title: '작업',
+			title: '',
 			key: 'actions',
+			width: 220,
+			align: 'right',
 			render: (_, record) => (
-				<Space>
+				<Space size="small" className="justify-content-end">
 					{record.deliveryStatus === 'READY' && (
 						<Button
 							type="primary"
@@ -323,24 +360,16 @@ const DeliveryManagement = () => {
 						</Button>
 					)}
 					{record.deliveryStatus === 'SHIPPED' && (
-						<>
-							<Button
-								type="primary"
-								icon={<CheckCircleOutlined />}
-								size="small"
-								onClick={() => handleCompleteDelivery(record.deliveryNo)}
-							>
-								배송 완료
-							</Button>
-							<Button
-								icon={<EditOutlined />}
-								size="small"
-								onClick={() => openUpdateModal(record)}
-							>
-								정보 수정
-							</Button>
-						</>
+						<Button
+							type="primary"
+							icon={<CheckCircleOutlined />}
+							size="small"
+							onClick={() => handleCompleteDelivery(record.deliveryNo)}
+						>
+							배송 완료
+						</Button>
 					)}
+					<EllipsisDropdown menu={buildRowMenu(record)} />
 				</Space>
 			),
 		},
@@ -439,17 +468,19 @@ const DeliveryManagement = () => {
 						{deliveries.length === 0 ? '배송 정보가 없습니다.' : '선택한 조건에 맞는 배송이 없습니다.'}
 					</div>
 				) : (
-					<Table
-						columns={tableColumns}
-						dataSource={filteredDeliveries}
-						rowKey="deliveryNo"
-						loading={loading}
-						pagination={{
-							pageSize: 10,
-							showSizeChanger: true,
-							showTotal: (total) => `총 ${total}건`,
-						}}
-					/>
+					<div className="table-responsive">
+						<Table
+							columns={tableColumns}
+							dataSource={filteredDeliveries}
+							rowKey="deliveryNo"
+							loading={loading}
+							pagination={{
+								pageSize: 10,
+								showSizeChanger: true,
+								showTotal: (total) => `총 ${total}건`,
+							}}
+						/>
+					</div>
 				)}
 			</Card>
 
@@ -515,6 +546,51 @@ const DeliveryManagement = () => {
 						<Input placeholder="택배사를 입력하세요 (선택)" />
 					</Form.Item>
 				</Form>
+			</Modal>
+
+			<Modal
+				title="배송 상세"
+				open={detailModalVisible}
+				onCancel={closeDetailModal}
+				footer={
+					<Button type="primary" onClick={closeDetailModal}>
+						닫기
+					</Button>
+				}
+				width={560}
+			>
+				{detailRecord ? (
+					<Descriptions column={1} size="small" bordered>
+						<Descriptions.Item label="배송 번호">{detailRecord.deliveryNo ?? '-'}</Descriptions.Item>
+						<Descriptions.Item label="주문 번호">
+							{detailRecord.orderNo ? (
+								<Typography.Link onClick={() => handleGoToOrder(detailRecord.orderNo)}>
+									{detailRecord.orderNo}
+								</Typography.Link>
+							) : (
+								'-'
+							)}
+						</Descriptions.Item>
+						<Descriptions.Item label="주문 아이템 번호">{detailRecord.orderItemNo ?? '-'}</Descriptions.Item>
+						<Descriptions.Item label="택배사">{detailRecord.deliveryCourier || '-'}</Descriptions.Item>
+						<Descriptions.Item label="송장번호">{detailRecord.deliveryTrackingNumber || '-'}</Descriptions.Item>
+						<Descriptions.Item label="배송 시작일">
+							{formatDate(detailRecord.deliveryStartDate)}
+						</Descriptions.Item>
+						<Descriptions.Item label="배송 완료일">
+							{formatDate(detailRecord.deliveryEndDate)}
+						</Descriptions.Item>
+						<Descriptions.Item label="반품 상태">
+							{detailRecord.returnStatus ? (
+								<Tag color={getReturnStatusColor(detailRecord.returnStatus)}>
+									{getReturnStatusLabel(detailRecord.returnStatus)}
+								</Tag>
+							) : (
+								'-'
+							)}
+						</Descriptions.Item>
+					</Descriptions>
+				) : null}
 			</Modal>
 		</div>
 	);

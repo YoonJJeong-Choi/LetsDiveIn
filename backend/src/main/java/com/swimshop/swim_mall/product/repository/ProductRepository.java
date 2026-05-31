@@ -43,4 +43,8 @@ public interface ProductRepository extends JpaRepository<ProductEntity, Long> {
      * 파트너 ID로 상품 목록 조회
      */
     List<ProductEntity> findByPartner_PartnerId(Long partnerId);
+
+    long countByProductActiveStatus(ActiveStatus status);
+
+    long countByPartner_PartnerIdAndProductActiveStatus(Long partnerId, ActiveStatus productActiveStatus);
 }

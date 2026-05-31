@@ -3,26 +3,24 @@ import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { formatKrw } from "@/lib/price/formatKrw";
+import { DEFAULT_PRODUCT_PLACEHOLDER } from "@/lib/media/productImage";
 import CountdownTimer from "../common/Countdown";
 
 import { useContextElement } from "@/context/Context";
 export default function ProductsCards6({ product }) {
-  const [currentImage, setCurrentImage] = useState(product.imgSrc);
+  const [currentImage, setCurrentImage] = useState(product.imgSrc || DEFAULT_PRODUCT_PLACEHOLDER);
   const router = useRouter();
 
   const {
     setQuickAddItem,
-    addToWishlist,
-    isAddedtoWishlist,
-    addToCompareItem,
-    isAddedtoCompareItem,
     setQuickViewItem,
     addProductToCart,
     isAddedToCartProducts,
   } = useContextElement();
 
   useEffect(() => {
-    setCurrentImage(product.imgSrc);
+    setCurrentImage(product.imgSrc || DEFAULT_PRODUCT_PLACEHOLDER);
   }, [product]);
 
   const goToDetail = () => {
@@ -53,7 +51,7 @@ export default function ProductsCards6({ product }) {
           />
           <Image
             className="lazyload img-hover"
-            src={product.imgHover}
+            src={product.imgHover || DEFAULT_PRODUCT_PLACEHOLDER}
             alt={product.title}
             width={600}
             height={800}
@@ -67,14 +65,23 @@ export default function ProductsCards6({ product }) {
         )}
       </div>
       <div className="card-product-info">
+        {product.brandName && (
+          <Link
+            href={`/search-result?brand=${encodeURIComponent(product.brandName)}`}
+            className="text-secondary"
+            style={{ fontSize: "12px", marginBottom: "2px", display: "block", textDecoration: "none" }}
+          >
+            {product.brandName}
+          </Link>
+        )}
         <Link href={`/product-detail/${product.id}`} className="title link">
           {product.title}
         </Link>
         <span className="price current-price">
           {product.oldPrice && (
-            <span className="old-price">₩{product.oldPrice.toLocaleString()}</span>
+            <span className="old-price">{formatKrw(product.oldPrice)}</span>
           )}{" "}
-          ₩{product.price?.toLocaleString()}
+          {formatKrw(product.price)}
         </span>
         <p className="description text-secondary text-line-clamp-2">
           The garments labelled as Committed are products that have been
@@ -95,7 +102,7 @@ export default function ProductsCards6({ product }) {
                   <span className={`swatch-value ${color.bgColor}`} />
                   <Image
                     className="lazyload"
-                    src={color.imgSrc}
+                    src={color.imgSrc || DEFAULT_PRODUCT_PLACEHOLDER}
                     alt="color variant"
                     width={600}
                     height={800}
@@ -121,32 +128,6 @@ export default function ProductsCards6({ product }) {
               {isAddedToCartProducts(product.id)
                 ? "Already Added"
                 : "Add To cart"}
-            </a>
-            <a
-              onClick={() => addToWishlist(product.id)}
-              className="box-icon wishlist btn-icon-action"
-            >
-              <span className="icon icon-heart" />
-              <span className="tooltip">
-                {isAddedtoWishlist(product.id)
-                  ? "Already Wishlished"
-                  : "Wishlist"}
-              </span>
-            </a>
-            <a
-              href="#compare"
-              data-bs-toggle="offcanvas"
-              aria-controls="compare"
-              onClick={() => addToCompareItem(product.id)}
-              className="box-icon compare btn-icon-action"
-            >
-              <span className="icon icon-gitDiff" />
-              <span className="tooltip">
-                {" "}
-                {isAddedtoCompareItem(product.id)
-                  ? "Already compared"
-                  : "Compare"}
-              </span>
             </a>
             <a
               href="#quickView"

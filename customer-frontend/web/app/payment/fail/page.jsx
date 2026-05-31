@@ -1,3 +1,8 @@
+export const metadata = {
+  title: "결제 실패 || Let’s Dive In",
+  description: "결제가 완료되지 않았습니다.",
+};
+
 export default function PaymentFail({ searchParams }) {
   const code = searchParams?.code;
   const message = searchParams?.message;

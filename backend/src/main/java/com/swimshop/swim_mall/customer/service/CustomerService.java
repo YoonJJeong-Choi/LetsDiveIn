@@ -11,6 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.swimshop.swim_mall.common.error.BusinessException;
 import com.swimshop.swim_mall.common.error.ErrorCode;
+import com.swimshop.swim_mall.common.ratelimit.InMemoryRateLimiterService;
+import com.swimshop.swim_mall.common.ratelimit.LoginLockoutService;
 import com.swimshop.swim_mall.customer.dto.CustomerRequestDto;
 import com.swimshop.swim_mall.customer.dto.CustomerResponseDto;
 import com.swimshop.swim_mall.customer.dto.CustomerUpdateRequestDto;
@@ -38,19 +40,28 @@ public class CustomerService {
     private final AccountRepository accountRepository;
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
+    private final InMemoryRateLimiterService rateLimiterService;
 
     private static final int TOKEN_EXPIRY_HOURS = 24; // 토큰 만료 시간 (24시간)
+    private static final int SIGNUP_EMAIL_LIMIT = 3;
+    private static final long SIGNUP_EMAIL_WINDOW_SECONDS = 3600;
 
     /**
      * 회원가입
      * 인증 토큰 생성 & 이메일 발송
      */
     public void join(CustomerRequestDto requestDto) {
+        String emailKey = LoginLockoutService.normalizeEmail(requestDto.getCustomerEmail());
+        if (!rateLimiterService.isAllowed("signup:email:" + emailKey, SIGNUP_EMAIL_LIMIT, SIGNUP_EMAIL_WINDOW_SECONDS)) {
+            throw new BusinessException(
+                    ErrorCode.RATE_LIMIT_EXCEEDED,
+                    "해당 이메일로 가입 요청이 너무 많습니다. 1시간 후 다시 시도해 주세요.");
+        }
 
-        // 이메일 중복 확인 (Customer 또는 Account)
+        // 이메일 중복 확인 (Customer 또는 Account) — 인증 완료 여부와 무관하게 동일 이메일 1계정
         if (customerRepository.existsByCustomerEmail(requestDto.getCustomerEmail())
                 || accountRepository.existsByEmail(requestDto.getCustomerEmail())) {
-            throw new IllegalArgumentException("이미 가입된 이메일입니다.");
+            throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS, "이미 가입된 이메일입니다.");
         }
 
         // 인증 토큰 생성, 만료 시간

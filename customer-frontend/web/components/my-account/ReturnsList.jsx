@@ -3,11 +3,14 @@ import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { getReturnsByCustomer, getReturnStatusLabel } from "@/lib/api/return";
+import InlineTemplateLoader from "@/components/common/InlineTemplateLoader";
+import { formatKrw } from "@/lib/price/formatKrw";
 
 export default function ReturnsList() {
   const [returns, setReturns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedReturn, setSelectedReturn] = useState(null);
 
   useEffect(() => {
     const fetchReturns = async () => {
@@ -62,7 +65,9 @@ export default function ReturnsList() {
   if (loading) {
     return (
       <div className="my-account-content">
-        <div className="text-center p-4">로딩 중...</div>
+        <div className="p-4 d-flex justify-content-center">
+          <InlineTemplateLoader />
+        </div>
       </div>
     );
   }
@@ -97,13 +102,13 @@ export default function ReturnsList() {
                             alt={returnItem.productName || "상품"}
                             src={
                               returnItem.productImageUrl ||
-                              "/images/products/womens/women-1.jpg"
+                              "/images/products/cap01.png"
                             }
                             width={80}
                             height={80}
                             style={{ objectFit: "cover", borderRadius: "8px", border: "1px solid #e0e0e0" }}
                             onError={(e) => {
-                              e.target.src = "/images/products/womens/women-1.jpg";
+                              e.target.src = "/images/products/cap01.png";
                             }}
                           />
                           <div>
@@ -157,7 +162,7 @@ export default function ReturnsList() {
                           반품 금액
                         </div>
                         <div className="fw-6" style={{ fontSize: "18px", color: "#333" }}>
-                          ₩{returnItem.returnAmount?.toLocaleString() || 0}
+                          {formatKrw(returnItem.returnAmount || 0)}
                         </div>
                       </div>
                       
@@ -173,6 +178,7 @@ export default function ReturnsList() {
                       
                       {/* 주문 상세 링크 */}
                       <div className="col-md-2 text-center">
+                        <div className="d-flex flex-column gap-2 align-items-center">
                         {returnItem.orderNo && (
                           <Link
                             href={`/my-account-orders-details?orderNo=${returnItem.orderNo}`}
@@ -182,6 +188,15 @@ export default function ReturnsList() {
                             주문 상세
                           </Link>
                         )}
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-secondary"
+                            style={{ whiteSpace: "nowrap" }}
+                            onClick={() => setSelectedReturn(returnItem)}
+                          >
+                            반품 상세
+                          </button>
+                        </div>
                       </div>
                     </div>
                     
@@ -201,6 +216,106 @@ export default function ReturnsList() {
           </div>
         )}
       </div>
+
+      {selectedReturn && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+          onClick={() => setSelectedReturn(null)}
+        >
+          <div
+            style={{
+              backgroundColor: "#fff",
+              borderRadius: "8px",
+              width: "min(640px, 92vw)",
+              maxHeight: "80vh",
+              overflowY: "auto",
+              padding: "24px",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="d-flex align-items-center justify-content-between mb-3">
+              <h5 className="mb-0">반품 상세</h5>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-secondary"
+                onClick={() => setSelectedReturn(null)}
+              >
+                닫기
+              </button>
+            </div>
+
+            <div className="row g-3">
+              <div className="col-md-6">
+                <div className="text-muted" style={{ fontSize: "12px" }}>반품번호</div>
+                <div className="fw-6">#{selectedReturn.returnNo}</div>
+              </div>
+              <div className="col-md-6">
+                <div className="text-muted" style={{ fontSize: "12px" }}>상태</div>
+                <span
+                  className={`badge ${getStatusBadgeClass(selectedReturn.returnStatus)}`}
+                  style={{ fontSize: "13px", padding: "6px 12px" }}
+                >
+                  {getReturnStatusLabel(selectedReturn.returnStatus)}
+                </span>
+              </div>
+              <div className="col-md-6">
+                <div className="text-muted" style={{ fontSize: "12px" }}>상품명</div>
+                <div>{selectedReturn.productName || "-"}</div>
+              </div>
+              <div className="col-md-6">
+                <div className="text-muted" style={{ fontSize: "12px" }}>옵션</div>
+                <div>{[selectedReturn.color, selectedReturn.size].filter(Boolean).join(" / ") || "-"}</div>
+              </div>
+              <div className="col-md-6">
+                <div className="text-muted" style={{ fontSize: "12px" }}>수량</div>
+                <div>{selectedReturn.quantity || 0}개</div>
+              </div>
+              <div className="col-md-6">
+                <div className="text-muted" style={{ fontSize: "12px" }}>반품 금액</div>
+                <div>{formatKrw(selectedReturn.returnAmount || 0)}</div>
+              </div>
+              <div className="col-md-6">
+                <div className="text-muted" style={{ fontSize: "12px" }}>신청일</div>
+                <div>{formatDate(selectedReturn.returnRequestedAt)}</div>
+              </div>
+              <div className="col-md-6">
+                <div className="text-muted" style={{ fontSize: "12px" }}>주문번호</div>
+                <div>{selectedReturn.orderNo ? `#${selectedReturn.orderNo}` : "-"}</div>
+              </div>
+              <div className="col-12">
+                <div className="text-muted" style={{ fontSize: "12px" }}>반품 사유</div>
+                <div>{selectedReturn.returnReason || "-"}</div>
+              </div>
+              {selectedReturn.rejectionReason && (
+                <div className="col-12">
+                  <div className="text-muted" style={{ fontSize: "12px" }}>거절 사유</div>
+                  <div className="text-danger">{selectedReturn.rejectionReason}</div>
+                </div>
+              )}
+              {selectedReturn.returnTrackingNumber && (
+                <div className="col-12">
+                  <div className="text-muted" style={{ fontSize: "12px" }}>반품 송장</div>
+                  <div>
+                    {selectedReturn.returnTrackingNumber}
+                    {selectedReturn.returnCourier ? ` (${selectedReturn.returnCourier})` : ""}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

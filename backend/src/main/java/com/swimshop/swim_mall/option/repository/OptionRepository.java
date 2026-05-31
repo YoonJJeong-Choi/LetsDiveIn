@@ -7,10 +7,13 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import com.swimshop.swim_mall.common.enums.ActiveStatus;
 import com.swimshop.swim_mall.option.entity.OptionEntity;
 
 @Repository
 public interface OptionRepository extends JpaRepository<OptionEntity, Long> {
+
+    long countByOptionStatus(ActiveStatus optionStatus);
     
     /**
      * 파트너 ID로 옵션 목록 조회 (상품 정보 포함, 모든 상태)
@@ -27,6 +30,8 @@ public interface OptionRepository extends JpaRepository<OptionEntity, Long> {
      * 파트너 ID로 옵션 목록 조회 (간단 버전, ACTIVE 상태만)
      */
     List<OptionEntity> findByPartner_PartnerIdAndOptionStatus(Long partnerId, com.swimshop.swim_mall.common.enums.ActiveStatus status);
+
+    long countByPartner_PartnerIdAndOptionStatus(Long partnerId, ActiveStatus optionStatus);
 
     /**
      * 상품 번호로 옵션 목록 조회 (ACTIVE 상태만) - 고객용

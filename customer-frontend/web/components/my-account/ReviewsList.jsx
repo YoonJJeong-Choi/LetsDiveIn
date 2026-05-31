@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { createReview, getMyReviews, getWritableReviews } from "@/lib/api/review";
 import Pagination from "@/components/common/Pagination";
+import InlineTemplateLoader from "@/components/common/InlineTemplateLoader";
 
 export default function ReviewsList() {
   const [reviews, setReviews] = useState([]);
@@ -148,7 +149,9 @@ export default function ReviewsList() {
   if (loading) {
     return (
       <div className="my-account-content">
-        <div className="text-center p-4">리뷰 목록을 불러오는 중...</div>
+        <div className="p-4 d-flex justify-content-center">
+          <InlineTemplateLoader />
+        </div>
       </div>
     );
   }
@@ -166,14 +169,14 @@ export default function ReviewsList() {
       <div className="account-reviews">
         <div className="d-flex gap-2 mb-4">
           <button
-            className={`tf-btn ${activeTab === "writable" ? "btn-fill" : "btn-outline"}`}
+            className={`tf-btn btn-reset ${activeTab === "writable" ? "btn-fill" : "btn-outline"}`}
             onClick={() => setActiveTab("writable")}
             type="button"
           >
             리뷰 작성 가능 ({writableTotal})
           </button>
           <button
-            className={`tf-btn ${activeTab === "written" ? "btn-fill" : "btn-outline"}`}
+            className={`tf-btn btn-reset ${activeTab === "written" ? "btn-fill" : "btn-outline"}`}
             onClick={() => setActiveTab("written")}
             type="button"
           >
@@ -194,7 +197,7 @@ export default function ReviewsList() {
                     <div className="review-product-image">
                       <Image
                         alt={item.productName || "상품"}
-                        src={item.productImageUrl || "/images/products/womens/women-1.jpg"}
+                        src={item.productImageUrl || "/images/products/cap01.png"}
                         width={120}
                         height={120}
                         style={{ objectFit: "cover", borderRadius: "8px" }}
@@ -222,14 +225,16 @@ export default function ReviewsList() {
                       <div className="d-flex gap-2">
                         <button
                           type="button"
-                          className="tf-btn btn-fill"
+                          className="tf-btn btn-reset btn-fill btn-md"
+                          style={{ padding: "8px 14px", fontSize: "13px", lineHeight: "20px" }}
                           onClick={() => openWriteModal(item)}
                         >
                           리뷰 작성
                         </button>
                         <Link
                           href={`/my-account-orders-details?orderNo=${item.orderNo}`}
-                          className="tf-btn btn-outline"
+                          className="tf-btn btn-reset btn-outline btn-md"
+                          style={{ padding: "8px 14px", fontSize: "13px", lineHeight: "20px" }}
                         >
                           주문 상세 보기
                         </Link>
@@ -283,12 +288,12 @@ export default function ReviewsList() {
                   <div className="review-product-image">
                     <Image
                       alt={review.productName || "상품"}
-                      src={review.productImageUrl || "/images/products/womens/women-1.jpg"}
+                      src={review.productImageUrl || "/images/products/cap01.png"}
                       width={120}
                       height={120}
                       style={{ objectFit: "cover", borderRadius: "8px" }}
                       onError={(e) => {
-                        e.target.src = "/images/products/womens/women-1.jpg";
+                        e.target.src = "/images/products/cap01.png";
                       }}
                     />
                   </div>

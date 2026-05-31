@@ -78,6 +78,14 @@ public class PaymentEntity {
 	public void setPaymentMethod(String paymentMethod) {
 		this.paymentMethod = paymentMethod;
 	}
+
+	public void setProvider(String provider) {
+		this.provider = provider;
+	}
+
+	public void setReceiptUrl(String receiptUrl) {
+		this.receiptUrl = receiptUrl;
+	}
     @Column(nullable = false)
     @Builder.Default
     private LocalDateTime paymentCreatedAt = LocalDateTime.now(); //생성일시

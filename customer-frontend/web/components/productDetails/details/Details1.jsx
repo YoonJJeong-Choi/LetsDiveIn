@@ -3,11 +3,38 @@ import React, { useEffect, useState } from "react";
 import Slider1 from "../sliders/Slider1";
 import ColorSizeSelect from "../ColorSizeSelect";
 import QuantitySelect from "../QuantitySelect";
-import Image from "next/image";
 import Link from "next/link";
 import { useContextElement } from "@/context/Context";
-import ProductStikyBottom from "../ProductStikyBottom";
 import { getApplicableSale } from "@/lib/api/sale";
+import { formatKrw } from "@/lib/price/formatKrw";
+import { getReviewsByProduct } from "@/lib/api/review";
+import { incrementProductView } from "@/lib/api/product";
+
+const PRODUCT_TYPE_LABELS = {
+  SWIMSUIT_MEN: "남성 수영복",
+  SWIMSUIT_WOMEN: "여성 수영복",
+  SWIMSUIT_KIDS: "아동 수영복",
+  SWIM_CAP: "수모",
+  SWIM_GOGGLES: "수경",
+  FINS: "오리발",
+  SWIM_TOY: "수영용품",
+  ETC: "기타",
+};
+
+const PRODUCT_SUB_TYPE_LABELS = {
+  NONE: "",
+  ONE_PIECE: "원피스",
+  BIKINI: "비키니",
+  MONOKINI: "모노키니",
+  RASH_GUARD: "래쉬가드",
+  TRUNKS: "트렁크",
+  JAMMER: "잠머",
+  BRIEF: "브리프",
+  CAP_SILICONE: "실리콘 수모",
+  CAP_FABRIC: "천 수모",
+  FINS_SHORT: "숏핀",
+  FINS_LONG: "롱핀",
+};
 export default function Details1({ product }) {
   const [selectedOptionNo, setSelectedOptionNo] = useState(null);
   const [selectedColor, setSelectedColor] = useState(null);
@@ -19,13 +46,11 @@ export default function Details1({ product }) {
   const [activeColor, setActiveColor] = useState("gray"); // Slider1에서 사용
   const [stockQuantity, setStockQuantity] = useState(null); // 재고 수량
   const [inStock, setInStock] = useState(null); // 재고 있음 여부
+  const [reviewCount, setReviewCount] = useState(0);
+  const [liveViewCount, setLiveViewCount] = useState(0);
   const {
     addProductToCart,
     isAddedToCartProducts,
-    addToWishlist,
-    isAddedtoWishlist,
-    isAddedtoCompareItem,
-    addToCompareItem,
     cartProducts,
     updateQuantity,
   } = useContextElement();
@@ -150,6 +175,38 @@ export default function Details1({ product }) {
     run();
   }, [product, selectedOptionNo, currentPrice]);
 
+  useEffect(() => {
+    const fetchReviewCount = async () => {
+      const productNo = product?.productNo ?? product?.id;
+      if (!productNo) {
+        setReviewCount(0);
+        return;
+      }
+      try {
+        const paged = await getReviewsByProduct(productNo, { page: 1, size: 1, sort: "latest" });
+        const payload = paged?.data || paged;
+        const total = Number(payload?.meta?.total || 0);
+        setReviewCount(Number.isFinite(total) ? total : 0);
+      } catch (e) {
+        setReviewCount(0);
+      }
+    };
+    fetchReviewCount();
+  }, [product?.productNo, product?.id]);
+
+  useEffect(() => {
+    const trackProductView = async () => {
+      const productNo = product?.productNo ?? product?.id;
+      if (!productNo) {
+        setLiveViewCount(0);
+        return;
+      }
+      const count = await incrementProductView(productNo);
+      setLiveViewCount(Number.isFinite(count) ? count : 0);
+    };
+    trackProductView();
+  }, [product?.productNo, product?.id]);
+
   // 옵션이 하나만 있으면 자동 선택
   useEffect(() => {
     if (product?.options && product.options.length === 1 && !selectedOptionNo) {
@@ -193,13 +250,29 @@ export default function Details1({ product }) {
   };
 
   const basePrice = product ? parseInt(product.price || product.minPrice || 0) : 0;
+  const realOptions = product?.options?.filter((opt) => opt.optionNo !== null) || [];
+  const optionDisplayPrices = realOptions
+    .map((opt) => Number(opt.salePrice ?? opt.totalPrice ?? 0))
+    .filter((price) => Number.isFinite(price) && price > 0);
+  const rangeMinPrice = optionDisplayPrices.length > 0 ? Math.min(...optionDisplayPrices) : Number(displayPrice || 0);
+  const rangeMaxPrice = optionDisplayPrices.length > 0 ? Math.max(...optionDisplayPrices) : Number(displayPrice || 0);
+  const showRangePrice =
+    selectedOptionNo == null && realOptions.length > 0 && rangeMinPrice < rangeMaxPrice;
 
   return (
     <section className="flat-spacing">
       <div className="tf-main-product section-image-zoom">
         <div className="container">
           <div className="mb-3">
-            <Link href="/shop-default-grid" className="tf-btn btn-line">
+            <Link
+              href="/shop-default-grid"
+              className="tf-btn btn-reset"
+              style={{
+                border: "none",
+                color: "#111111",
+                background: "transparent",
+              }}
+            >
               ← 상품 목록으로
             </Link>
           </div>
@@ -225,7 +298,17 @@ export default function Details1({ product }) {
                 <div className="tf-product-info-list other-image-zoom">
                   <div className="tf-product-info-heading">
                     <div className="tf-product-info-name">
-                      <div className="text text-btn-uppercase">Clothing</div>
+                      {product.brandName ? (
+                        <Link
+                          href={`/search-result?brand=${encodeURIComponent(product.brandName)}`}
+                          className="text text-btn-uppercase"
+                          style={{ textDecoration: "none", color: "#666" }}
+                        >
+                          {product.brandName}
+                        </Link>
+                      ) : (
+                        <div className="text text-btn-uppercase">상품</div>
+                      )}
                       <h3 className="name">{product.title}</h3>
                       <div className="sub">
                         <div className="tf-product-info-rate">
@@ -237,47 +320,43 @@ export default function Details1({ product }) {
                             <i className="icon icon-star" />
                           </div>
                           <div className="text text-caption-1">
-                            (134 reviews)
-                          </div>
-                        </div>
-                        <div className="tf-product-info-sold">
-                          <i className="icon icon-lightning" />
-                          <div className="text text-caption-1">
-                            18&nbsp;sold in last&nbsp;32&nbsp;hours
+                            (리뷰 {reviewCount}개)
                           </div>
                         </div>
                       </div>
                     </div>
                     <div className="tf-product-info-desc">
                       <div className="tf-product-info-price">
-                        <h5 className="price-on-sale font-2">
-                          {" "}
-                          ₩{displayPrice?.toLocaleString() || 0}
-                        </h5>
-                        {displayOldPrice && displayOldPrice !== currentPrice ? (
-                          <>
-                            <div className="compare-at-price font-2">
-                              {" "}
-                              ₩{displayOldPrice?.toLocaleString() || 0}
-                            </div>
-                            <div className="badges-on-sale text-btn-uppercase">
-                              -{Math.round(((displayOldPrice - displayPrice) / displayOldPrice) * 100)}%
-                            </div>
-                          </>
+                        {showRangePrice ? (
+                          <h5 className="price-on-sale font-2">
+                            {formatKrw(rangeMinPrice)} ~ {formatKrw(rangeMaxPrice)}
+                          </h5>
                         ) : (
-                          ""
+                          <>
+                            <h5 className="price-on-sale font-2">
+                              {" "}
+                              {formatKrw(displayPrice || 0)}
+                            </h5>
+                            {displayOldPrice && displayOldPrice !== currentPrice ? (
+                              <>
+                                <div className="compare-at-price font-2">
+                                  {" "}
+                                  {formatKrw(displayOldPrice || 0)}
+                                </div>
+                                <div className="badges-on-sale text-btn-uppercase">
+                                  -{Math.round(((displayOldPrice - displayPrice) / displayOldPrice) * 100)}%
+                                </div>
+                              </>
+                            ) : (
+                              ""
+                            )}
+                          </>
                         )}
                       </div>
-                      <p>
-                        The garments labelled as Committed are products that
-                        have been produced using sustainable fibres or
-                        processes, reducing their environmental impact.
-                      </p>
                       <div className="tf-product-info-liveview">
                         <i className="icon icon-eye" />
                         <p className="text-caption-1">
-                          <span className="liveview-count">28</span> people are
-                          viewing this right now
+                          현재 <span className="liveview-count">{liveViewCount}</span>명이 이 상품을 보고 있어요
                         </p>
                       </div>
                     </div>
@@ -295,7 +374,7 @@ export default function Details1({ product }) {
                     )}
                     <div className="tf-product-info-quantity">
                       <div className="title mb_12">
-                        Quantity:
+                        수량:
                         {stockQuantity !== null && stockQuantity !== undefined && (
                           stockQuantity === 0 ? (
                             <span style={{ 
@@ -320,15 +399,15 @@ export default function Details1({ product }) {
                       </div>
                       <QuantitySelect
                         quantity={
-                          isAddedToCartProducts(product.id)
-                            ? cartProducts.filter(
-                                (elm) => elm.id == product.id
-                              )[0].quantity
+                          isAddedToCartProducts(product.id, selectedOptionNo)
+                            ? cartProducts.find(
+                                (elm) => elm.id == product.id && elm.selectedOptionNo === selectedOptionNo
+                              )?.quantity || quantity
                             : quantity
                         }
                         setQuantity={(qty) => {
-                          if (isAddedToCartProducts(product.id)) {
-                            updateQuantity(product.id, qty);
+                          if (isAddedToCartProducts(product.id, selectedOptionNo)) {
+                            updateQuantity(product.id, qty, selectedOptionNo);
                           } else {
                             setQuantity(qty);
                           }
@@ -493,218 +572,47 @@ export default function Details1({ product }) {
                           }}
                         >
                           <span>
-                            Add to cart -
+                            장바구니 담기 -
                           </span>
                           <span className="tf-qty-price total-price">
-                            ₩
                             {isAddedToCartProducts(product.id, selectedOptionNo)
-                              ? (
+                              ? formatKrw(
                                   displayPrice *
-                                  cartProducts.find(
-                                    (elm) => elm.id == product.id && elm.selectedOptionNo === selectedOptionNo
-                                  )?.quantity || quantity
-                                ).toLocaleString()
-                              : (displayPrice * quantity).toLocaleString()}{" "}
-                          </span>
-                        </a>
-                        <a
-                          href="#compare"
-                          data-bs-toggle="offcanvas"
-                          aria-controls="compare"
-                          onClick={() => addToCompareItem(product.id)}
-                          className="box-icon hover-tooltip compare btn-icon-action"
-                        >
-                          <span className="icon icon-gitDiff" />
-                          <span className="tooltip text-caption-2">
-                            {isAddedtoCompareItem(product.id)
-                              ? "Already compared"
-                              : "Compare"}
-                          </span>
-                        </a>
-                        <a
-                          onClick={() => addToWishlist(product.id)}
-                          className="box-icon hover-tooltip text-caption-2 wishlist btn-icon-action"
-                        >
-                          <span className="icon icon-heart" />
-                          <span className="tooltip text-caption-2">
-                            {isAddedtoWishlist(product.id)
-                              ? "Already Wishlished"
-                              : "Wishlist"}
+                                    (cartProducts.find(
+                                      (elm) =>
+                                        elm.id == product.id &&
+                                        elm.selectedOptionNo === selectedOptionNo
+                                    )?.quantity || quantity)
+                                )
+                              : formatKrw(displayPrice * quantity)}{" "}
                           </span>
                         </a>
                       </div>
                       <a href="#" className="btn-style-3 text-btn-uppercase">
-                        Buy it now
+                        바로 구매
                       </a>
-                    </div>
-                    <div className="tf-product-info-help">
-                      <div className="tf-product-info-extra-link">
-                        <a
-                          href="#delivery_return"
-                          data-bs-toggle="modal"
-                          className="tf-product-extra-icon"
-                        >
-                          <div className="icon">
-                            <i className="icon-shipping" />
-                          </div>
-                          <p className="text-caption-1">
-                            Delivery &amp; Return
-                          </p>
-                        </a>
-                        <a
-                          href="#ask_question"
-                          data-bs-toggle="modal"
-                          className="tf-product-extra-icon"
-                        >
-                          <div className="icon">
-                            <i className="icon-question" />
-                          </div>
-                          <p className="text-caption-1">Ask A Question</p>
-                        </a>
-                        <a
-                          href="#share_social"
-                          data-bs-toggle="modal"
-                          className="tf-product-extra-icon"
-                        >
-                          <div className="icon">
-                            <i className="icon-share" />
-                          </div>
-                          <p className="text-caption-1">Share</p>
-                        </a>
-                      </div>
-                      <div className="tf-product-info-time">
-                        <div className="icon">
-                          <i className="icon-timer" />
-                        </div>
-                        <p className="text-caption-1">
-                          Estimated Delivery:&nbsp;&nbsp;<span>12-26 days</span>
-                          (International), <span>3-6 days</span> (United States)
-                        </p>
-                      </div>
-                      <div className="tf-product-info-return">
-                        <div className="icon">
-                          <i className="icon-arrowClockwise" />
-                        </div>
-                        <p className="text-caption-1">
-                          Return within <span>45 days</span> of purchase. Duties
-                          &amp; taxes are non-refundable.
-                        </p>
-                      </div>
-                      <div className="dropdown dropdown-store-location">
-                        <div
-                          className="dropdown-title dropdown-backdrop"
-                          data-bs-toggle="dropdown"
-                          aria-haspopup="true"
-                        >
-                          <div className="tf-product-info-view link">
-                            <div className="icon">
-                              <i className="icon-map-pin" />
-                            </div>
-                            <span>View Store Information</span>
-                          </div>
-                        </div>
-                        <div className="dropdown-menu dropdown-menu-end">
-                          <div className="dropdown-content">
-                            <div className="dropdown-content-heading">
-                              <h5>Store Location</h5>
-                              <i className="icon icon-close" />
-                            </div>
-                            <div className="line-bt" />
-                            <div>
-                              <h6>Fashion Modave</h6>
-                              <p>Pickup available. Usually ready in 24 hours</p>
-                            </div>
-                            <div>
-                              <p>766 Rosalinda Forges Suite 044,</p>
-                              <p>Gracielahaven, Oregon</p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
                     </div>
                     <ul className="tf-product-info-sku">
                       <li>
                         <p className="text-caption-1">SKU:</p>
-                        <p className="text-caption-1 text-1">53453412</p>
+                        <p className="text-caption-1 text-1">{product?.sku || "-"}</p>
                       </li>
                       <li>
-                        <p className="text-caption-1">Vendor:</p>
-                        <p className="text-caption-1 text-1">Modave</p>
+                        <p className="text-caption-1">브랜드:</p>
+                        <p className="text-caption-1 text-1">{product?.brandName || "-"}</p>
                       </li>
                       <li>
-                        <p className="text-caption-1">Available:</p>
-                        <p className="text-caption-1 text-1">Instock</p>
-                      </li>
-                      <li>
-                        <p className="text-caption-1">Categories:</p>
-                        <p className="text-caption-1">
-                          <a href="#" className="text-1 link">
-                            Clothes
-                          </a>
-                          ,
-                          <a href="#" className="text-1 link">
-                            women
-                          </a>
-                          ,
-                          <a href="#" className="text-1 link">
-                            T-shirt
-                          </a>
+                        <p className="text-caption-1">카테고리:</p>
+                        <p className="text-caption-1 text-1">
+                          {[
+                            PRODUCT_TYPE_LABELS[product?.category] || product?.category,
+                            PRODUCT_SUB_TYPE_LABELS[product?.subCategory] || product?.subCategory,
+                          ]
+                            .filter((label) => Boolean(label))
+                            .join(" / ") || "-"}
                         </p>
                       </li>
                     </ul>
-                    <div className="tf-product-info-guranteed">
-                      <div className="text-title">Guranteed safe checkout:</div>
-                      <div className="tf-payment">
-                        <a href="#">
-                          <Image
-                            alt=""
-                            src="/images/payment/img-1.png"
-                            width={100}
-                            height={64}
-                          />
-                        </a>
-                        <a href="#">
-                          <Image
-                            alt=""
-                            src="/images/payment/img-2.png"
-                            width={100}
-                            height={64}
-                          />
-                        </a>
-                        <a href="#">
-                          <Image
-                            alt=""
-                            src="/images/payment/img-3.png"
-                            width={100}
-                            height={64}
-                          />
-                        </a>
-                        <a href="#">
-                          <Image
-                            alt=""
-                            src="/images/payment/img-4.png"
-                            width={98}
-                            height={64}
-                          />
-                        </a>
-                        <a href="#">
-                          <Image
-                            alt=""
-                            src="/images/payment/img-5.png"
-                            width={102}
-                            height={64}
-                          />
-                        </a>
-                        <a href="#">
-                          <Image
-                            alt=""
-                            src="/images/payment/img-6.png"
-                            width={98}
-                            height={64}
-                          />
-                        </a>
-                      </div>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -713,7 +621,6 @@ export default function Details1({ product }) {
           </div>
         </div>
       </div>
-      <ProductStikyBottom />
     </section>
   );
 }

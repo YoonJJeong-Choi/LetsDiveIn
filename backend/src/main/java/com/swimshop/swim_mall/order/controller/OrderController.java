@@ -16,6 +16,7 @@ import com.swimshop.swim_mall.common.response.ApiResponse;
 import com.swimshop.swim_mall.common.response.PagedResponse;
 import com.swimshop.swim_mall.delivery.dto.DeliveryResponseDto;
 import com.swimshop.swim_mall.delivery.service.DeliveryService;
+import com.swimshop.swim_mall.order.dto.AdminOrderListResponseDto;
 import com.swimshop.swim_mall.order.dto.OrderCreateRequestDto;
 import com.swimshop.swim_mall.order.dto.OrderItemResponseDto;
 import com.swimshop.swim_mall.order.dto.OrderResponseDto;
@@ -107,11 +108,12 @@ public class OrderController {
      * - 파트너: 자신의 상품 주문만 조회
      */
     @GetMapping("/admin")
-    public ResponseEntity<ApiResponse<PagedResponse<OrderResponseDto>>> getAllOrders(
+    public ResponseEntity<ApiResponse<AdminOrderListResponseDto>> getAllOrders(
             HttpSession session,
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        PagedResponse<OrderResponseDto> orders = orderService.getAllOrders(session, page, size);
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String status) {
+        AdminOrderListResponseDto orders = orderService.getAllOrders(session, page, size, status);
         return ResponseEntity.ok(ApiResponse.success(orders));
     }
 
@@ -129,10 +131,9 @@ public class OrderController {
     }
 
     /**
-     * 주문 상태 변경 (관리자만)
+     * 주문 상태 수동 변경 — 비활성화됨 (403).
+     * 상태는 결제·발주 확인·배송·반품 등 전용 API로만 변경합니다.
      * PATCH /api/orders/{orderNo}/status
-     * - 관리자: 모든 주문 상태 변경 가능 (예외 상황 처리용)
-     * - 파트너: 주문 상태 변경 불가 (발주 확인 API 사용)
      */
     @PatchMapping("/{orderNo}/status")
     public ResponseEntity<ApiResponse<OrderResponseDto>> updateOrderStatus(

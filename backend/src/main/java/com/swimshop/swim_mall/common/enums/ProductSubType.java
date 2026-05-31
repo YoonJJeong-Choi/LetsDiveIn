@@ -13,7 +13,7 @@ public enum ProductSubType {
     JAMMER("잠머", ProductType.SWIMSUIT_MEN),
     BRIEF("브리프", ProductType.SWIMSUIT_MEN),
     
-    // 수영모자
+    // 수모
     CAP_SILICONE("실리콘 수모", ProductType.SWIM_CAP),
     CAP_FABRIC("천 수모", ProductType.SWIM_CAP),
     

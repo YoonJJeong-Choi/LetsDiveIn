@@ -3,9 +3,7 @@ import { Dropdown, Avatar } from 'antd';
 import { useDispatch, useSelector } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
 import { 
-	EditOutlined, 
 	SettingOutlined, 
-	ShopOutlined, 
 	QuestionCircleOutlined, 
 	LogoutOutlined 
 } from '@ant-design/icons';
@@ -80,9 +78,6 @@ export const NavProfile = ({mode}) => {
 	const userRole = user?.role || 'ADMIN'
 	const isPartner = userRole === 'PARTNER'
 	const [avatarUrl, setAvatarUrl] = useState(user?.avatar || null)
-	const profilePath = isPartner ? `${APP_PREFIX_PATH}/partner/settings?tab=profile` : `${APP_PREFIX_PATH}/pages/profile`
-	const accountSettingPath = isPartner ? `${APP_PREFIX_PATH}/partner/settings` : `${APP_PREFIX_PATH}/pages/setting`
-	const accountBillingPath = isPartner ? `${APP_PREFIX_PATH}/partner/settlement` : `${APP_PREFIX_PATH}/apps/admin/settlement`
 	const helpCenterPath = `${APP_PREFIX_PATH}/pages/faq`
 	
 	// 파트너인 경우 프로필 이미지 로드
@@ -112,29 +107,19 @@ export const NavProfile = ({mode}) => {
 	}
 	const roleTitle = roleMap[userRole] || '사용자'
 	const items = [
-		{
-			key: 'Edit Profile',
-			label: <MenuItem label="Edit Profile" icon={<EditOutlined />} />,
-			onClick: () => navigate(profilePath),
-		},
-		{
+		...(isPartner ? [{
 			key: 'Account Setting',
-			label: <MenuItem label="Account Setting" icon={<SettingOutlined />} />,
-			onClick: () => navigate(accountSettingPath),
-		},
-		{
-			key: 'Account Billing',
-			label: <MenuItem label="Account Billing" icon={<ShopOutlined />} />,
-			onClick: () => navigate(accountBillingPath),
-		},
+			label: <MenuItem label="계정 설정" icon={<SettingOutlined />} />,
+			onClick: () => navigate(`${APP_PREFIX_PATH}/partner/settings`),
+		}] : []),
 		{
 			key: 'Help Center',
-			label: <MenuItem label="Help Center" icon={<QuestionCircleOutlined />} />,
+			label: <MenuItem label="도움말" icon={<QuestionCircleOutlined />} />,
 			onClick: () => navigate(helpCenterPath),
 		},
 		{
 			key: 'Sign Out',
-			label: <MenuItemSignOut label="Sign Out" />,
+			label: <MenuItemSignOut label="로그아웃" />,
 		}
 	]
 

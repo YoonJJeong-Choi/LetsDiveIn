@@ -232,6 +232,24 @@ PartnerService.getMyPartnerInfo = function () {
 	})
 }
 
+/** 파트너 대시보드 — 운영·추이·정산 요약 @param {{ trendDays?: number }} [params] trendDays 7~30(백엔드 클램프) */
+PartnerService.getTodayOperations = function (params = {}) {
+	return fetch({
+		url: '/partner/dashboard/today-operations',
+		method: 'get',
+		params,
+	})
+}
+
+/** 파트너 매출·운영 분석 @param {{ trendDays?: number, productNo?: number }} [params] trendDays 7~90 */
+PartnerService.getDashboardAnalytics = function (params = {}) {
+	return fetch({
+		url: '/partner/dashboard/analytics',
+		method: 'get',
+		params,
+	})
+}
+
 /**
  * 현재 로그인한 파트너의 저위험 프로필 조회
  * @returns {Promise} 파트너 프로필

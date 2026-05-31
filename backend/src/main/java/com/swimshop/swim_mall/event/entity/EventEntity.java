@@ -56,6 +56,10 @@ public class EventEntity {
     @Column(nullable = false)
     private LocalDateTime customerEventEndAt;
 
+    /** 고객 몰 목록·상세 노출 시작 시각. null이면 고객 API에서 비공개(파트너만 PUBLISHED 등). */
+    @Column(nullable = true)
+    private LocalDateTime customerExposeAt;
+
     @Column(nullable = false)
     @Builder.Default
     private Boolean partnerApplyEnabled = false;
@@ -131,6 +135,7 @@ public class EventEntity {
             EventStatus eventStatus,
             LocalDateTime customerEventStartAt,
             LocalDateTime customerEventEndAt,
+            LocalDateTime customerExposeAt,
             Boolean partnerApplyEnabled,
             LocalDateTime partnerApplyStartAt,
             LocalDateTime partnerApplyEndAt,
@@ -149,6 +154,7 @@ public class EventEntity {
         this.eventStatus = eventStatus;
         this.customerEventStartAt = customerEventStartAt;
         this.customerEventEndAt = customerEventEndAt;
+        this.customerExposeAt = customerExposeAt;
         this.partnerApplyEnabled = partnerApplyEnabled != null ? partnerApplyEnabled : false;
         this.partnerApplyStartAt = partnerApplyStartAt;
         this.partnerApplyEndAt = partnerApplyEndAt;

@@ -19,7 +19,9 @@ import org.springframework.format.annotation.DateTimeFormat;
 import com.swimshop.swim_mall.account.service.AuthService;
 import com.swimshop.swim_mall.common.enums.AccountRole;
 import com.swimshop.swim_mall.common.response.ApiResponse;
+import com.swimshop.swim_mall.partner.dto.PartnerDashboardAnalyticsDto;
 import com.swimshop.swim_mall.partner.dto.PartnerSalesStatisticsDto;
+import com.swimshop.swim_mall.partner.dto.PartnerTodayOperationsDto;
 import com.swimshop.swim_mall.partner.dto.PartnerProfileResponseDto;
 import com.swimshop.swim_mall.partner.dto.PartnerProfileUpdateRequestDto;
 import com.swimshop.swim_mall.partner.dto.PartnerChangeRequestCreateDto;
@@ -50,6 +52,35 @@ public class PartnerController {
     
     private final PartnerService partnerService;
     private final AuthService authService;
+
+    /**
+     * 파트너 대시보드 — 운영·추이·정산 요약
+     * GET /api/partner/dashboard/today-operations?trendDays=30 (trendDays: 7~30, 결제 완료 일별 추이)
+     */
+    @GetMapping("/dashboard/today-operations")
+    public ResponseEntity<ApiResponse<PartnerTodayOperationsDto>> getPartnerTodayOperations(
+            HttpSession session,
+            @RequestParam(defaultValue = "30") int trendDays
+    ) {
+        authService.requireRole(session, AccountRole.PARTNER);
+        PartnerTodayOperationsDto dto = partnerService.getPartnerTodayOperations(session, trendDays);
+        return ResponseEntity.ok(ApiResponse.success(dto));
+    }
+
+    /**
+     * 파트너 매출·운영 분석(기간 7~90일, 선택 상품번호 필터)
+     * GET /api/partner/dashboard/analytics?trendDays=30&productNo=
+     */
+    @GetMapping("/dashboard/analytics")
+    public ResponseEntity<ApiResponse<PartnerDashboardAnalyticsDto>> getPartnerDashboardAnalytics(
+            HttpSession session,
+            @RequestParam(defaultValue = "30") int trendDays,
+            @RequestParam(required = false) Long productNo
+    ) {
+        authService.requireRole(session, AccountRole.PARTNER);
+        PartnerDashboardAnalyticsDto dto = partnerService.getPartnerDashboardAnalytics(session, trendDays, productNo);
+        return ResponseEntity.ok(ApiResponse.success(dto));
+    }
     
     /**
      * 현재 로그인한 파트너의 상품 목록 조회

@@ -17,7 +17,7 @@ import com.swimshop.swim_mall.return_order.dto.ReturnRequestDto;
 import com.swimshop.swim_mall.return_order.dto.ReturnResponseDto;
 import com.swimshop.swim_mall.return_order.dto.ReturnUpdateRequestDto;
 import com.swimshop.swim_mall.return_order.dto.ReturnHistoryDto;
-import com.swimshop.swim_mall.return_order.dto.ReturnAiAssistResponseDto;
+import com.swimshop.swim_mall.return_order.dto.ReturnAssistResponseDto;
 import com.swimshop.swim_mall.return_order.service.ReturnService;
 
 import jakarta.servlet.http.HttpSession;
@@ -127,14 +127,32 @@ public class ReturnController {
     }
 
     /**
-     * 관리자 반품 AI 보조 결과 조회 (MVP)
-     * GET /api/returns/{returnNo}/ai-assist
+     * 관리자 반품 검토 보조 (규칙 기반)
+     * GET /api/returns/{returnNo}/return-assist
      */
-    @GetMapping("/{returnNo}/ai-assist")
-    public ResponseEntity<ApiResponse<ReturnAiAssistResponseDto>> getAdminAiAssist(
+    @GetMapping("/{returnNo}/return-assist")
+    public ResponseEntity<ApiResponse<ReturnAssistResponseDto>> getAdminReturnAssist(
             HttpSession session,
             @PathVariable Long returnNo) {
-        ReturnAiAssistResponseDto response = returnService.getAdminAiAssist(session, returnNo);
+        ReturnAssistResponseDto response = returnService.getAdminReturnAssist(session, returnNo);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    /** @deprecated {@link #getAdminReturnAssist(HttpSession, Long)} */
+    @Deprecated
+    @GetMapping("/{returnNo}/review-assist")
+    public ResponseEntity<ApiResponse<ReturnAssistResponseDto>> getAdminReviewAssist(
+            HttpSession session,
+            @PathVariable Long returnNo) {
+        return getAdminReturnAssist(session, returnNo);
+    }
+
+    /** @deprecated {@link #getAdminReturnAssist(HttpSession, Long)} */
+    @Deprecated
+    @GetMapping("/{returnNo}/ai-assist")
+    public ResponseEntity<ApiResponse<ReturnAssistResponseDto>> getAdminAiAssist(
+            HttpSession session,
+            @PathVariable Long returnNo) {
+        return getAdminReturnAssist(session, returnNo);
     }
 }

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, Table, Button, Modal, Form, Input, Select, Space, message, Popconfirm, Tag } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
 import AdminService from 'services/AdminService';
+import { INQUIRY_CATEGORIES, getCategoryLabel } from 'constants/inquiryCategories';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -13,16 +14,7 @@ const FaqManagement = () => {
 	const [editingFaq, setEditingFaq] = useState(null);
 	const [form] = Form.useForm();
 
-	// FAQ 카테고리 옵션
-	const faqCategories = [
-		{ value: '주문/결제', label: '주문/결제' },
-		{ value: '배송', label: '배송' },
-		{ value: '취소/반품/교환', label: '취소/반품/교환' },
-		{ value: '회원정보', label: '회원정보' },
-		{ value: '상품', label: '상품' },
-		{ value: '포인트/쿠폰', label: '포인트/쿠폰' },
-		{ value: '기타', label: '기타' }
-	];
+	const faqCategories = INQUIRY_CATEGORIES;
 
 	useEffect(() => {
 		fetchFaqs();
@@ -104,8 +96,10 @@ const FaqManagement = () => {
 			dataIndex: 'faqCategory',
 			key: 'faqCategory',
 			width: 150,
-			render: (category) => <Tag color="blue">{category}</Tag>,
-			filters: faqCategories.map(cat => ({ text: cat.label, value: cat.value })),
+			render: (category, record) => (
+				<Tag color="blue">{record.faqCategoryLabel || getCategoryLabel(category)}</Tag>
+			),
+			filters: faqCategories.map(cat => ({ text: cat.label, value: cat.code })),
 			onFilter: (value, record) => record.faqCategory === value,
 		},
 		{
@@ -213,7 +207,7 @@ const FaqManagement = () => {
 					>
 						<Select placeholder="카테고리를 선택하세요">
 							{faqCategories.map(cat => (
-								<Option key={cat.value} value={cat.value}>{cat.label}</Option>
+								<Option key={cat.code} value={cat.code}>{cat.label}</Option>
 							))}
 						</Select>
 					</Form.Item>

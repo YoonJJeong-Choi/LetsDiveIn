@@ -20,6 +20,7 @@ import com.swimshop.swim_mall.order.entity.OrderItemEntity;
 import com.swimshop.swim_mall.order.repository.OrderItemRepository;
 import com.swimshop.swim_mall.partner.entity.PartnerEntity;
 import com.swimshop.swim_mall.partner.repository.PartnerRepository;
+import com.swimshop.swim_mall.product.service.ProductCustomerImageUrlResolver;
 import com.swimshop.swim_mall.common.enums.PartnerStatus;
 
 import jakarta.servlet.http.HttpSession;
@@ -34,6 +35,7 @@ public class DeliveryService {
     private final OrderItemRepository orderItemRepository;
     private final AuthService authService;
     private final PartnerRepository partnerRepository;
+    private final ProductCustomerImageUrlResolver productCustomerImageUrlResolver;
 
     /**
      * 전체 배송 목록 조회 (관리자/파트너용)
@@ -366,7 +368,8 @@ public class DeliveryService {
             if (delivery.getOrderItem().getProduct() != null) {
                 productNo = delivery.getOrderItem().getProduct().getProductNo();
                 productName = delivery.getOrderItem().getProduct().getProductName();
-                productImageUrl = delivery.getOrderItem().getProduct().getProductImageUrl();
+                productImageUrl = productCustomerImageUrlResolver.resolveDisplayUrlOrEmpty(
+                        delivery.getOrderItem().getProduct());
             }
             
             // 옵션 정보 (nullable)

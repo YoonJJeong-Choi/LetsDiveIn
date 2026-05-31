@@ -1,12 +1,36 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { getOrder, completeOrder, completeOrderItem, cancelOrder } from "@/lib/api/order";
 import { getDeliveriesByOrderNo } from "@/lib/api/delivery";
 import { requestReturn } from "@/lib/api/return";
 import { createReview, getMyReviews } from "@/lib/api/review";
 import { uploadFile } from "@/lib/api/file";
+import InlineTemplateLoader from "@/components/common/InlineTemplateLoader";
+import { formatKrw } from "@/lib/price/formatKrw";
+
+/** GET /api/reviews/customer 응답: { reviews, meta } — 과거 items 형태도 허용 */
+function extractMyReviewsList(payload) {
+  if (!payload) return [];
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload.reviews)) return payload.reviews;
+  if (Array.isArray(payload.items)) return payload.items;
+  const inner = payload.data;
+  if (inner && Array.isArray(inner.reviews)) return inner.reviews;
+  if (inner && Array.isArray(inner.items)) return inner.items;
+  return [];
+}
+
+/** 주문 상품 줄 PK (JSON camelCase / snake_case 혼용·문자열 숫자 대비) */
+function pickOrderItemNo(orderItem) {
+  if (!orderItem) return null;
+  const v = orderItem.orderItemNo ?? orderItem.order_item_no;
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
 
 export default function OrderDetails() {
   const [activeTab, setActiveTab] = useState(1);
@@ -19,6 +43,8 @@ export default function OrderDetails() {
   const [returning, setReturning] = useState(false);
   const [returnModalVisible, setReturnModalVisible] = useState(false);
   const [selectedOrderItem, setSelectedOrderItem] = useState(null);
+  const RETURN_REASON_MAX = 200;
+
   const [returnReasonType, setReturnReasonType] = useState("CHANGE_OF_MIND");
   const [returnReason, setReturnReason] = useState("");
   const [returnImages, setReturnImages] = useState([]); // {fileId, fileUrl, name}[]
@@ -28,6 +54,8 @@ export default function OrderDetails() {
   const [reviewImages, setReviewImages] = useState([]); // {fileId, fileUrl, name}[]
   const [reviewing, setReviewing] = useState(false);
   const [myReviews, setMyReviews] = useState([]);
+  /** 리뷰 제출 이중 호출(Strict Mode·더블클릭) 방지 */
+  const submittingReviewRef = useRef(false);
   const searchParams = useSearchParams();
   const orderNo = searchParams?.get("orderNo");
 
@@ -60,8 +88,7 @@ export default function OrderDetails() {
         // 내 리뷰 목록 조회 (리뷰 작성 여부 확인용)
         try {
           const reviewsData = await getMyReviews({ page: 1, size: 9999 });
-          const list = reviewsData?.items || reviewsData?.data?.items || [];
-          setMyReviews(Array.isArray(list) ? list : []);
+          setMyReviews(extractMyReviewsList(reviewsData));
         } catch (reviewError) {
           console.log("리뷰 목록 조회 실패:", reviewError);
           setMyReviews([]);
@@ -102,6 +129,24 @@ export default function OrderDetails() {
       hour: "2-digit",
       minute: "2-digit",
     });
+  };
+
+  // 결제 수단 라벨 변환
+  const getPaymentMethodLabel = (method) => {
+    switch (method) {
+      case "CARD":
+        return "카드";
+      case "VIRTUAL_ACCOUNT":
+        return "가상계좌";
+      case "TRANSFER":
+        return "계좌이체";
+      case "MOBILE_PHONE":
+        return "휴대폰 결제";
+      case "EASY_PAY":
+        return "간편결제";
+      default:
+        return method || "-";
+    }
   };
 
   // 주문에 반품 상태 확인 (status 필드 기반)
@@ -376,8 +421,14 @@ export default function OrderDetails() {
       return false;
     }
     
-    // 이미 리뷰를 작성한 상품인지 확인
-    const hasReview = myReviews.some(review => review.orderItemNo === orderItem.orderItemNo);
+    // 이미 리뷰를 작성한 상품인지 확인 (API/JSON에서 숫자·문자 혼재 가능)
+    const itemNo = pickOrderItemNo(orderItem);
+    if (itemNo == null) return false;
+    const hasReview = myReviews.some((review) => {
+      if (!review) return false;
+      const rn = review.orderItemNo ?? review.order_item_no;
+      return rn != null && Number(rn) === itemNo;
+    });
     if (hasReview) {
       return false;
     }
@@ -387,7 +438,12 @@ export default function OrderDetails() {
 
   // 리뷰 작성 모달 열기
   const handleOpenReviewModal = (orderItem) => {
-    setSelectedOrderItem(orderItem);
+    const itemNo = pickOrderItemNo(orderItem);
+    if (itemNo == null) {
+      alert("주문 상품 번호를 확인할 수 없습니다. 페이지를 새로고침한 뒤 다시 시도해주세요.");
+      return;
+    }
+    setSelectedOrderItem({ ...orderItem, orderItemNo: itemNo });
     setReviewRating(5);
     setReviewContent("");
     setReviewImages([]);
@@ -415,10 +471,21 @@ export default function OrderDetails() {
       return;
     }
 
+    const orderItemNo = pickOrderItemNo(selectedOrderItem);
+    if (orderItemNo == null) {
+      alert("주문 상품 번호가 올바르지 않습니다. 페이지를 새로고침 후 다시 시도해주세요.");
+      return;
+    }
+
+    if (submittingReviewRef.current) {
+      return;
+    }
+    submittingReviewRef.current = true;
+
     try {
       setReviewing(true);
       await createReview({
-        orderItemNo: selectedOrderItem.orderItemNo,
+        orderItemNo,
         reviewContent: reviewContent.trim(),
         reviewRating: reviewRating,
         imageFileIds: reviewImages.map(img => img.fileId),
@@ -429,14 +496,28 @@ export default function OrderDetails() {
       setReviewRating(5);
       setSelectedOrderItem(null);
       
-      // 리뷰 목록 새로고침
-      const reviewsData = await getMyReviews();
-      setMyReviews(reviewsData.data || reviewsData || []);
+      // 리뷰 목록 새로고침 (응답은 { reviews, meta } 형태)
+      const reviewsData = await getMyReviews({ page: 1, size: 9999 });
+      setMyReviews(extractMyReviewsList(reviewsData));
     } catch (err) {
       console.error("리뷰 작성 실패:", err);
-      alert(err.message || "리뷰 작성에 실패했습니다.");
+      const msg = err.message || "";
+      if (msg.includes("이미 리뷰")) {
+        try {
+          const reviewsData = await getMyReviews({ page: 1, size: 9999 });
+          setMyReviews(extractMyReviewsList(reviewsData));
+        } catch (_) {
+          /* ignore */
+        }
+        alert(
+          "이미 이 주문 상품 줄에 리뷰가 있습니다. 옵션이 다르면(주문이 다른 줄이면) 각각 리뷰를 쓸 수 있습니다. 내 리뷰 목록을 다시 불러왔습니다."
+        );
+      } else {
+        alert(msg || "리뷰 작성에 실패했습니다.");
+      }
     } finally {
       setReviewing(false);
+      submittingReviewRef.current = false;
     }
   };
 
@@ -522,7 +603,7 @@ export default function OrderDetails() {
 
   const handleUploadReturnImages = async (files) => {
     if (!files || files.length === 0) return;
-    const maxCount = 5;
+    const maxCount = 3;
     const remain = Math.max(0, maxCount - returnImages.length);
     const slice = Array.from(files).slice(0, remain);
     const uploaded = [];
@@ -561,6 +642,10 @@ export default function OrderDetails() {
       return;
     }
     const detail = returnReason.trim();
+    if (detail.length > RETURN_REASON_MAX) {
+      alert(`상세 사유는 ${RETURN_REASON_MAX}자 이하로 입력해주세요.`);
+      return;
+    }
     if (needsReturnDetailText()) {
       if (!detail) {
         alert("선택하신 반품 유형은 상세 사유 입력이 필요합니다.");
@@ -603,7 +688,9 @@ export default function OrderDetails() {
   if (loading) {
     return (
       <div className="my-account-content">
-        <div className="text-center p-4">로딩 중...</div>
+        <div className="p-4 d-flex justify-content-center">
+          <InlineTemplateLoader />
+        </div>
       </div>
     );
   }
@@ -631,7 +718,7 @@ export default function OrderDetails() {
             <figure className="img-product">
               <Image
                 alt="product"
-                src="/images/products/womens/women-1.jpg"
+                src="/images/products/cap01.png"
                 width={600}
                 height={800}
               />
@@ -646,8 +733,19 @@ export default function OrderDetails() {
               }`}>
                 {getOrderStatusLabel(order.orderStatus)}
               </div>
-              <h6 className="mt-8 fw-5">Order #{order.orderNo}</h6>
+              <h6 className="mt-8 fw-5">주문 #{order.orderNo}</h6>
               <div className="mt-3 d-flex gap-2 flex-wrap">
+                <Link
+                  href="/my-account-orders"
+                  className="btn btn-outline-secondary"
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: "4px",
+                    fontSize: "14px",
+                  }}
+                >
+                  주문 목록으로
+                </Link>
                 {canCancelOrder() && (
                   <button
                     className="btn btn-danger"
@@ -674,7 +772,7 @@ export default function OrderDetails() {
           </div>
           <div className="tf-grid-layout md-col-2 gap-15">
             <div className="item">
-              <div className="text-2 text_black-2">Item</div>
+              <div className="text-2 text_black-2">상품</div>
               <div className="text-2 mt_4 fw-6">
                 {order.orderItems && order.orderItems.length > 0
                   ? order.orderItems.length === 1
@@ -684,7 +782,7 @@ export default function OrderDetails() {
               </div>
             </div>
             <div className="item">
-              <div className="text-2 text_black-2">Courier</div>
+              <div className="text-2 text_black-2">택배사</div>
               <div className="text-2 mt_4 fw-6">
                 {deliveries.length > 0 && deliveries[0].deliveryCourier
                   ? deliveries[0].deliveryCourier
@@ -692,7 +790,7 @@ export default function OrderDetails() {
               </div>
             </div>
             <div className="item">
-              <div className="text-2 text_black-2">Start Time</div>
+              <div className="text-2 text_black-2">배송 시작일</div>
               <div className="text-2 mt_4 fw-6">
                 {deliveries.length > 0 && deliveries[0].deliveryStartDate
                   ? formatDate(deliveries[0].deliveryStartDate)
@@ -700,7 +798,7 @@ export default function OrderDetails() {
               </div>
             </div>
             <div className="item">
-              <div className="text-2 text_black-2">Address</div>
+              <div className="text-2 text_black-2">배송지</div>
               <div className="text-2 mt_4 fw-6">
                 {order.deliveryAddress || "-"}
                 {order.deliveryAddressDetail && ` ${order.deliveryAddressDetail}`}
@@ -713,25 +811,25 @@ export default function OrderDetails() {
                 className={`item-title ${activeTab == 1 ? "active" : ""} `}
                 onClick={() => setActiveTab(1)}
               >
-                <span className="inner">Order History</span>
+                <span className="inner">주문 이력</span>
               </li>
               <li
                 className={`item-title ${activeTab == 2 ? "active" : ""} `}
                 onClick={() => setActiveTab(2)}
               >
-                <span className="inner">Item Details</span>
+                <span className="inner">상품 상세</span>
               </li>
               <li
                 className={`item-title ${activeTab == 3 ? "active" : ""} `}
                 onClick={() => setActiveTab(3)}
               >
-                <span className="inner">Courier</span>
+                <span className="inner">배송 정보</span>
               </li>
               <li
                 className={`item-title ${activeTab == 4 ? "active" : ""} `}
                 onClick={() => setActiveTab(4)}
               >
-                <span className="inner">Receiver</span>
+                <span className="inner">수령인 정보</span>
               </li>
             </ul>
             <div className="widget-content-tab">
@@ -835,11 +933,11 @@ export default function OrderDetails() {
                           <figure className="img-product">
                             <Image
                               alt={item.productName || "상품"}
-                              src={item.productImageUrl || "/images/products/womens/women-1.jpg"}
+                              src={item.productImageUrl || "/images/products/cap01.png"}
                               width={600}
                               height={800}
                               onError={(e) => {
-                                e.target.src = "/images/products/womens/women-1.jpg";
+                                e.target.src = "/images/products/cap01.png";
                               }}
                             />
                           </figure>
@@ -878,7 +976,7 @@ export default function OrderDetails() {
                               })()}
                             </div>
                             <div className="mt_4">
-                              <span className="fw-6">단가 :</span> ₩{item.itemPrice?.toLocaleString() || 0}
+                              <span className="fw-6">단가 :</span> {formatKrw(item.itemPrice || 0)}
                             </div>
                             <div className="mt_4">
                               <span className="fw-6">수량 :</span> {item.quantity || 0}개
@@ -891,7 +989,7 @@ export default function OrderDetails() {
                             )}
                             {item.itemDiscountAmount > 0 && (
                               <div className="mt_4">
-                                <span className="fw-6">할인 :</span> -₩{item.itemDiscountAmount?.toLocaleString() || 0}
+                                <span className="fw-6">할인 :</span> -{formatKrw(item.itemDiscountAmount || 0)}
                               </div>
                             )}
                             {/* 반품 상태 표시 */}
@@ -987,7 +1085,7 @@ export default function OrderDetails() {
                                   리뷰 작성
                                 </button>
                               )}
-                              {!canWriteReview(item) && item.status === "COMPLETED" && myReviews.some(r => r.orderItemNo === item.orderItemNo) && (
+                              {!canWriteReview(item) && item.status === "COMPLETED" && myReviews.some((r) => r && pickOrderItemNo({ orderItemNo: r.orderItemNo, order_item_no: r.order_item_no }) === pickOrderItemNo(item)) && (
                                 <span className="badge bg-info" style={{ fontSize: "12px", padding: "6px 12px" }}>
                                   리뷰 작성 완료
                                 </span>
@@ -998,7 +1096,7 @@ export default function OrderDetails() {
                         <ul>
                           <li className="d-flex justify-content-between text-2">
                             <span>아이템 총액</span>
-                            <span className="fw-6">₩{item.itemTotalPrice?.toLocaleString() || 0}</span>
+                            <span className="fw-6">{formatKrw(item.itemTotalPrice || 0)}</span>
                           </li>
                         </ul>
                       </div>
@@ -1007,12 +1105,12 @@ export default function OrderDetails() {
                       <ul>
                         <li className="d-flex justify-content-between text-2">
                           <span>주문 총액</span>
-                          <span className="fw-6">₩{order.orderTotalPrice?.toLocaleString() || 0}</span>
+                          <span className="fw-6">{formatKrw(order.orderTotalPrice || 0)}</span>
                         </li>
                         {order.paymentAmount && (
                           <li className="d-flex justify-content-between text-2 mt_4">
                             <span>결제 금액</span>
-                            <span className="fw-6">₩{order.paymentAmount?.toLocaleString() || 0}</span>
+                            <span className="fw-6">{formatKrw(order.paymentAmount || 0)}</span>
                           </li>
                         )}
                       </ul>
@@ -1101,40 +1199,40 @@ export default function OrderDetails() {
                 } `}
               >
                 <p className="text-2 text-success">
-                  Thank you Your order has been received
+                  주문이 정상 접수되었습니다.
                 </p>
                 <ul className="mt_20">
                   <li>
-                    Order Number : <span className="fw-7">#{order.orderNo}</span>
+                    주문번호 : <span className="fw-7">#{order.orderNo}</span>
                   </li>
                   <li>
-                    Date : <span className="fw-7">{formatDate(order.orderCreatedAt)}</span>
+                    주문일 : <span className="fw-7">{formatDate(order.orderCreatedAt)}</span>
                   </li>
                   <li>
-                    Total : <span className="fw-7">{order.orderTotalPrice?.toLocaleString()}원</span>
+                    총 결제 금액 : <span className="fw-7">{order.orderTotalPrice?.toLocaleString()}원</span>
                   </li>
                   <li>
-                    Payment Methods :
-                    <span className="fw-7">{order.paymentMethod || "-"}</span>
+                    결제 수단 :
+                    <span className="fw-7">{getPaymentMethodLabel(order.paymentMethod)}</span>
                   </li>
                   {order.paidAt && (
                     <li>
-                      Payment Date : <span className="fw-7">{formatDate(order.paidAt)}</span>
+                      결제일 : <span className="fw-7">{formatDate(order.paidAt)}</span>
                     </li>
                   )}
                   {order.recipientName && (
                     <li>
-                      Recipient : <span className="fw-7">{order.recipientName}</span>
+                      수령인 : <span className="fw-7">{order.recipientName}</span>
                     </li>
                   )}
                   {order.recipientPhone && (
                     <li>
-                      Recipient Phone : <span className="fw-7">{order.recipientPhone}</span>
+                      수령인 연락처 : <span className="fw-7">{order.recipientPhone}</span>
                     </li>
                   )}
                   {order.deliveryAddress && (
                     <li>
-                      Delivery Address : <span className="fw-7">{order.deliveryAddress}{order.deliveryAddressDetail ? ` ${order.deliveryAddressDetail}` : ""}</span>
+                      배송지 주소 : <span className="fw-7">{order.deliveryAddress}{order.deliveryAddressDetail ? ` ${order.deliveryAddressDetail}` : ""}</span>
                     </li>
                   )}
                 </ul>
@@ -1200,7 +1298,7 @@ export default function OrderDetails() {
                 </p>
                 <p className="mb-3">
                   <strong>금액:</strong>{" "}
-                  {(selectedOrderItem.itemTotalPrice ?? 0).toLocaleString()}원
+                  {(selectedOrderItem.itemTotalPrice ?? 0 )}원
                 </p>
               </div>
             )}
@@ -1225,7 +1323,7 @@ export default function OrderDetails() {
               <label className="form-label">
                 <strong>
                   반품 증빙 이미지
-                  {needsReturnImages() ? " * (최대 5장)" : " (선택, 최대 5장)"}
+                  {needsReturnImages() ? " * (최대 3장)" : " (선택, 최대 3장)"}
                 </strong>
               </label>
               <div
@@ -1306,20 +1404,34 @@ export default function OrderDetails() {
                   상세 사유{needsReturnDetailText() ? " *" : " (선택)"}
                 </strong>
               </label>
+              <p className="text-muted small mb-1">
+                한글·영문 상관없이 공백 포함 최대 {RETURN_REASON_MAX}자 이하로 입력해주세요.
+              </p>
               <textarea
                 className="form-control"
                 rows="4"
                 value={returnReason}
-                onChange={(e) => setReturnReason(e.target.value)}
+                onChange={(e) =>
+                  setReturnReason(
+                    e.target.value.slice(0, RETURN_REASON_MAX)
+                  )
+                }
+                maxLength={RETURN_REASON_MAX}
                 placeholder={
                   returnReasonType === "OTHER"
-                    ? "기타 사유를 10자 이상 구체적으로 입력해주세요."
+                    ? `기타 사유를 10자 이상 구체적으로 입력해주세요. (최대 ${RETURN_REASON_MAX}자)`
                     : needsReturnDetailText()
-                    ? "불량·쇼핑몰 측 오배송 내용을 5자 이상 입력해주세요."
-                    : "필요 시 추가로 남길 메모를 입력해주세요."
+                    ? `불량·쇼핑몰 측 오배송 내용을 5자 이상 입력해주세요. (최대 ${RETURN_REASON_MAX}자)`
+                    : `필요 시 추가로 남길 메모를 입력해주세요. (최대 ${RETURN_REASON_MAX}자)`
                 }
                 disabled={returning}
               />
+              <div
+                className="text-end small text-muted mt-1"
+                aria-live="polite"
+              >
+                {returnReason.length} / {RETURN_REASON_MAX}자
+              </div>
             </div>
             <div className="d-flex gap-2 justify-content-end">
               <button

@@ -43,4 +43,5 @@ public class OrderResponseDto {
     private LocalDateTime paymentCreatedAt; // 결제 생성일시
     private LocalDateTime paidAt; // 결제 승인일시
     private Boolean paymentCancelYn; // 결제 취소 여부
+    private String paymentFailReason; // 결제 실패 사유 (PAYMENT_FAILED 시)
 }

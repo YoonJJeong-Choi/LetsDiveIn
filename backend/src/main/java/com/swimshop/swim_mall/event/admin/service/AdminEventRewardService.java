@@ -209,7 +209,7 @@ public class AdminEventRewardService {
     public List<Long> getSnapshotEligibleEventNosAt(LocalDateTime at) {
         if (at == null) return List.of();
         return eventRepository.findActiveEventsByMode(
-                        EventStatus.ACTIVE,
+                        EventStatus.PUBLISHED,
                         EventMode.ADMIN_ONLY,
                         at
                 ).stream()
@@ -226,7 +226,7 @@ public class AdminEventRewardService {
         // 하위 호환: 스냅샷 없는 기존 주문은 기존 런타임 판정 로직 유지
         LocalDateTime at = orderItem.getCompletedAt() != null ? orderItem.getCompletedAt() : LocalDateTime.now();
         return eventRepository.findActiveEventsByMode(
-                EventStatus.ACTIVE,
+                EventStatus.PUBLISHED,
                 EventMode.ADMIN_ONLY,
                 at
         );

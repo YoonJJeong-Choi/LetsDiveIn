@@ -1,59 +1,70 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Card, Modal, Space, Spin, Table, Tag, Typography, message, Tabs } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import { Alert, Button, Card, Col, Empty, Modal, Row, Select, Space, Spin, Tag, Typography, message } from 'antd';
+import { CalendarOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useSelector } from 'react-redux';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import PartnerService from 'services/PartnerService';
-import PartnerEventPerformance from '../event-performance';
 import { APP_PREFIX_PATH } from 'configs/AppConfig';
 
 const { Text } = Typography;
+const { Option } = Select;
 
-const STATUS_LABEL = {
-	DRAFT: '임시저장',
-	SCHEDULED: '예정',
-	ACTIVE: '진행중',
-	INACTIVE: '중지',
+const STATUS_LABELS = {
+	PRIVATE: '비공개',
+	PUBLISHED: '공개',
 	ENDED: '종료',
 };
 
-const STATUS_PRIORITY = {
-	ACTIVE: 0,
-	SCHEDULED: 1,
-	ENDED: 2,
+const STATUS_COLORS = {
+	PRIVATE: 'default',
+	PUBLISHED: 'blue',
+	ENDED: 'green',
 };
 
-const EVENT_TYPE_LABEL = {
+const EVENT_TYPE_LABELS = {
 	SALE: '세일',
-	GENERAL: '일반',
 	POINT: '포인트',
-	ATTENDANCE: '출석',
-	COUPON: '쿠폰',
+	NOTICE: '공지',
 };
 
-const DISCOUNT_TYPE_LABEL = {
+const DISCOUNT_TYPE_LABELS = {
 	PERCENT: '정률(%)',
 	FIXED: '정액(원)',
 };
 
-const CATEGORY_KO = {
-  SWIMSUIT_MEN: '남성 수영복',
-  SWIMSUIT_WOMEN: '여성 수영복',
-  SWIMSUIT_KIDS: '아동 수영복',
-  SWIM_CAP: '수영모자',
-  SWIM_GOGGLES: '수영안경',
-  FINS: '오리발',
-  SWIM_TOY: '수영용품',
-  ETC: '기타',
-};
-const toKoCategory = (code) => CATEGORY_KO[code] || code;
-const formatDateOnly = (value) => {
-	if (!value) return '-';
-	return dayjs(value).format('YYYY-MM-DD');
+const CATEGORY_LABELS = {
+	SWIMSUIT_MEN: '남성 수영복',
+	SWIMSUIT_WOMEN: '여성 수영복',
+	SWIMSUIT_KIDS: '아동 수영복',
+	SWIM_CAP: '수모',
+	SWIM_GOGGLES: '수경',
+	FINS: '오리발',
+	SWIM_TOY: '수영용품',
+	ETC: '기타',
 };
 
-const normalizeData = (res) => res?.data ?? res ?? [];
+const STATUS_PRIORITY = {
+	PUBLISHED: 0,
+	ENDED: 1,
+};
+
+const formatDate = (value) => {
+	if (!value) return '-';
+	const date = dayjs(value);
+	return date.isValid() ? date.format('YYYY.MM.DD') : '-';
+};
+
+const getDdayText = (event) => {
+	const now = dayjs();
+	const start = event?.customerEventStartAt ? dayjs(event.customerEventStartAt) : null;
+	const end = event?.customerEventEndAt ? dayjs(event.customerEventEndAt) : null;
+
+	if (event?.eventStatus === 'ENDED') return '종료됨';
+	if (start && now.isBefore(start)) return `시작 D-${Math.max(0, start.startOf('day').diff(now.startOf('day'), 'day'))}`;
+	if (end && !now.isAfter(end)) return `종료 D-${Math.max(0, end.startOf('day').diff(now.startOf('day'), 'day'))}`;
+	return '기간 확인 필요';
+};
 
 const getApplyWindowState = (event) => {
 	const now = dayjs();
@@ -61,16 +72,141 @@ const getApplyWindowState = (event) => {
 	const end = event?.partnerApplyEndAt ? dayjs(event.partnerApplyEndAt) : null;
 
 	if (!start || !end || !start.isValid() || !end.isValid()) {
-		return { canToggle: false, label: '기간 미설정' };
+		return { canToggle: false, label: '기간 미설정', color: 'default' };
 	}
 	if (now.isBefore(start)) {
-		return { canToggle: false, label: '신청 시작 전' };
+		return { canToggle: false, label: '신청 시작 전', color: 'gold' };
 	}
 	if (now.isAfter(end)) {
-		return { canToggle: false, label: '신청 마감' };
+		return { canToggle: false, label: '신청 마감', color: 'default' };
 	}
-	return { canToggle: true, label: '신청 가능' };
+	return { canToggle: true, label: '신청 가능', color: 'blue' };
 };
+
+const getParticipationStatus = (event) => {
+	if (event?.participationEnabled) {
+		if (event?.eventType === 'SALE' && event?.participating) {
+			return { label: '세일 등록 완료', color: 'blue' };
+		}
+		return { label: '신청 완료', color: 'green' };
+	}
+	return getApplyWindowState(event);
+};
+
+const getTargetSummary = (event) => {
+	const targetType = event?.pointEventTargetType;
+	const values = Array.isArray(event?.pointEventTargetValues) ? event.pointEventTargetValues : [];
+	if (event?.eventType === 'SALE') return '세일 상품 등록';
+	if (!targetType || targetType === 'ALL') return '전체 품목목';
+	if (targetType === 'PRODUCT' && values.length) return `상품 #${values.slice(0, 3).join(', #')}${values.length > 3 ? ' 외' : ''}`;
+	if (targetType === 'OPTION' && values.length) return `옵션 #${values.slice(0, 3).join(', #')}${values.length > 3 ? ' 외' : ''}`;
+	if (targetType === 'CATEGORY' && values.length) return values.slice(0, 3).map((value) => CATEGORY_LABELS[value] || value).join(', ');
+	if (targetType === 'MIN_ORDER_AMOUNT' && event?.pointEventMinOrderAmount != null) {
+		return `${Number(event.pointEventMinOrderAmount).toLocaleString()}원 이상`;
+	}
+	return '전체 품목목';
+};
+
+const EventHeader = ({ event }) => (
+	<div>
+		<Space size={6} wrap className="mb-2">
+			<Tag color={STATUS_COLORS[event.eventStatus] || 'default'}>{STATUS_LABELS[event.eventStatus] || event.eventStatus}</Tag>
+			<Tag>{EVENT_TYPE_LABELS[event.eventType] || event.eventType || '종류 미지정'}</Tag>
+			<Tag>파트너 참여형</Tag>
+			<Tag icon={<CalendarOutlined />}>{getDdayText(event)}</Tag>
+		</Space>
+		<h4 className="mb-1">{event.eventTitle || `이벤트 #${event.eventNo}`}</h4>
+		<Text type="secondary">#{event.eventNo}</Text>
+	</div>
+);
+
+const EventSchedule = ({ event }) => (
+	<Space direction="vertical" size={4} className="w-100">
+		<div className="d-flex justify-content-between">
+			<Text type="secondary">신청 기간</Text>
+			<Text>{formatDate(event.partnerApplyStartAt)} ~ {formatDate(event.partnerApplyEndAt)}</Text>
+		</div>
+		<div className="d-flex justify-content-between">
+			<Text type="secondary">이벤트 기간</Text>
+			<Text>{formatDate(event.customerEventStartAt)} ~ {formatDate(event.customerEventEndAt)}</Text>
+		</div>
+		<div className="d-flex justify-content-between">
+			<Text type="secondary">이벤트 유형</Text>
+			<Text>{getTargetSummary(event)}</Text>
+		</div>
+	</Space>
+);
+
+const EventParticipation = ({ event }) => {
+	const status = getParticipationStatus(event);
+	return (
+		<div>
+			<Text type="secondary" className="mr-2">내 참여 상태</Text>
+			<Tag color={status.color}>{status.label}</Tag>
+			{event.eventType === 'SALE' && event.participationEnabled && !event.participating && (
+				<Tag color="gold">세일 등록 필요</Tag>
+			)}
+		</div>
+	);
+};
+
+const EventActions = ({ event, actionLoading, onOpenDetail, onToggleParticipation, onOpenPerformance, showDetail = true }) => {
+	const windowState = getApplyWindowState(event);
+	const rowLoading = Boolean(actionLoading[event.eventNo]);
+
+	return (
+		<Space wrap>
+			{showDetail && (
+				<Button icon={<EyeOutlined />} onClick={() => onOpenDetail(event)}>
+					상세 보기
+				</Button>
+			)}
+			{event.participationEnabled ? (
+				<Button
+					danger
+					disabled={!windowState.canToggle}
+					loading={rowLoading}
+					onClick={() => onToggleParticipation(event, false)}
+				>
+					참여 해제
+				</Button>
+			) : (
+				<Button
+					type="primary"
+					disabled={!windowState.canToggle}
+					loading={rowLoading}
+					onClick={() => onToggleParticipation(event, true)}
+				>
+					참여 신청
+				</Button>
+			)}
+			<Button type="link" onClick={() => onOpenPerformance(event)}>
+				실적
+			</Button>
+		</Space>
+	);
+};
+
+const EventCard = ({ event, actionLoading, onOpenDetail, onToggleParticipation, onOpenPerformance }) => (
+	<Card>
+		<div className="mb-3">
+			<EventHeader event={event} />
+		</div>
+		<EventSchedule event={event} />
+		<div className="mt-3">
+			<EventParticipation event={event} />
+		</div>
+		<div className="d-flex justify-content-end mt-3">
+			<EventActions
+				event={event}
+				actionLoading={actionLoading}
+				onOpenDetail={onOpenDetail}
+				onToggleParticipation={onToggleParticipation}
+				onOpenPerformance={onOpenPerformance}
+			/>
+		</div>
+	</Card>
+);
 
 const PartnerEvents = () => {
 	const { user } = useSelector((state) => state.auth);
@@ -79,27 +215,20 @@ const PartnerEvents = () => {
 	const [actionLoading, setActionLoading] = useState({});
 	const [events, setEvents] = useState([]);
 	const [currentPage, setCurrentPage] = useState(1);
-	const [pageSize, setPageSize] = useState(10);
+	const [pageSize, setPageSize] = useState(12);
 	const [totalItems, setTotalItems] = useState(0);
 	const [selectedEvent, setSelectedEvent] = useState(null);
 	const [statusFilter, setStatusFilter] = useState('ALL');
 
 	const partnerEvents = useMemo(
 		() =>
-			events
+			(events || [])
 				.filter((event) => event?.eventMode === 'PARTNER_PARTICIPATION')
 				.filter((event) => statusFilter === 'ALL' || event?.eventStatus === statusFilter)
 				.sort((a, b) => {
 					const aPriority = STATUS_PRIORITY[a?.eventStatus] ?? 99;
 					const bPriority = STATUS_PRIORITY[b?.eventStatus] ?? 99;
 					if (aPriority !== bPriority) return aPriority - bPriority;
-
-					// 종료 이벤트는 최근 종료순, 그 외는 시작일 기준 오름차순(가까운 일정 우선)
-					if (a?.eventStatus === 'ENDED' && b?.eventStatus === 'ENDED') {
-						const aEnd = a?.customerEventEndAt ? new Date(a.customerEventEndAt).getTime() : 0;
-						const bEnd = b?.customerEventEndAt ? new Date(b.customerEventEndAt).getTime() : 0;
-						return bEnd - aEnd;
-					}
 					const aStart = a?.customerEventStartAt ? new Date(a.customerEventStartAt).getTime() : 0;
 					const bStart = b?.customerEventStartAt ? new Date(b.customerEventStartAt).getTime() : 0;
 					return aStart - bStart;
@@ -107,26 +236,34 @@ const PartnerEvents = () => {
 		[events, statusFilter]
 	);
 
+	const summary = useMemo(() => {
+		const rows = events || [];
+		return {
+			total: rows.length,
+			applyOpen: rows.filter((event) => getApplyWindowState(event).canToggle && !event.participationEnabled).length,
+			participating: rows.filter((event) => event.participationEnabled).length,
+			ended: rows.filter((event) => event.eventStatus === 'ENDED').length,
+		};
+	}, [events]);
+
 	const loadEvents = async () => {
 		setLoading(true);
 		try {
-			console.log('[Partner Events] request params =>', { page: currentPage, size: pageSize });
 			const res = await PartnerService.getPartnerVisibleEvents({ page: currentPage, size: pageSize });
 			const data = res?.data ?? res;
-			// 서버 표준: data.events + meta. 호환: items / 배열
 			const meta = data?.meta;
-			let items = Array.isArray(data) ? data : (data?.events ?? data?.items ?? []);
-			let total = Array.isArray(data) ? data.length : (meta?.total ?? data?.total ?? 0);
-			let respPage = Array.isArray(data) ? currentPage : (((meta?.page ?? data?.page) ?? 0) + 1);
-			let respSize = Array.isArray(data) ? pageSize : (meta?.size ?? data?.size ?? pageSize);
-			console.log('[Partner Events] response meta =>', { page: meta?.page ?? data?.page, size: respSize, total, itemsCount: Array.isArray(items) ? items.length : 0 });
+			const items = Array.isArray(data) ? data : (data?.events ?? data?.items ?? []);
+			const total = Array.isArray(data) ? data.length : (meta?.total ?? data?.total ?? 0);
+			const respPage = Array.isArray(data) ? currentPage : (((meta?.page ?? data?.page) ?? 0) + 1);
+			const respSize = Array.isArray(data) ? pageSize : (meta?.size ?? data?.size ?? pageSize);
 			setEvents(Array.isArray(items) ? items : []);
 			setTotalItems(Number(total) || 0);
 			setCurrentPage(respPage);
 			setPageSize(respSize);
 		} catch (err) {
-			console.error('파트너 이벤트 목록 조회 실패:', err);
 			message.warning(err?.response?.data?.message || '이벤트 목록 조회에 실패했습니다.');
+			setEvents([]);
+			setTotalItems(0);
 		} finally {
 			setLoading(false);
 		}
@@ -134,102 +271,79 @@ const PartnerEvents = () => {
 
 	useEffect(() => {
 		loadEvents();
+	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [currentPage, pageSize]);
 
-	const handleToggleParticipation = async (eventNo, nextParticipating) => {
+	const updateEventParticipation = (eventNo, nextParticipating) => {
+		setEvents((prev) =>
+			prev.map((event) =>
+				event.eventNo === eventNo
+					? { ...event, participationEnabled: nextParticipating, participating: nextParticipating ? event.participating : false }
+					: event
+			)
+		);
+		setSelectedEvent((prev) =>
+			prev?.eventNo === eventNo
+				? { ...prev, participationEnabled: nextParticipating, participating: nextParticipating ? prev.participating : false }
+				: prev
+		);
+	};
+
+	const handleToggleParticipation = async (event, nextParticipating) => {
+		const eventNo = event.eventNo;
 		setActionLoading((prev) => ({ ...prev, [eventNo]: true }));
 		try {
-			const targetEvent = (events || []).find((e) => e?.eventNo === eventNo);
-			const isSaleEvent = targetEvent?.eventType === 'SALE';
-			const isPointEvent = targetEvent?.eventType === 'POINT';
+			const isSaleEvent = event.eventType === 'SALE';
 
 			if (nextParticipating) {
 				await PartnerService.participateEvent(eventNo);
-				// 참여 완료 안내는 토스트 대신 모달/상세로 제공
-				const typeLabel =
-					targetEvent?.pointEventTargetType === 'PARTNER' ? '파트너 대상' :
-					targetEvent?.pointEventTargetType === 'PRODUCT' ? '상품 지정 대상' :
-					targetEvent?.pointEventTargetType === 'OPTION' ? '옵션 지정 대상' :
-					targetEvent?.pointEventTargetType === 'CATEGORY' ? '카테고리 지정 대상' :
-					targetEvent?.pointEventTargetType === 'MIN_ORDER_AMOUNT' ? '최소 주문금액 기준' :
-					'전체 대상';
-
 				if (isSaleEvent) {
-					const applyEndLabel = targetEvent?.partnerApplyEndAt
-						? dayjs(targetEvent.partnerApplyEndAt).format('YYYY-MM-DD')
-						: null;
 					Modal.info({
 						title: '세일 등록 안내',
-						content: applyEndLabel
-							? `참여가 완료되었습니다. ${applyEndLabel}까지 세일 등록 페이지에서 상품/옵션을 선택해 세일을 등록해주세요.`
-							: '참여가 완료되었습니다. 세일 등록 페이지로 가서 상품/옵션을 선택해주세요.',
-						okText: '확인',
-						onOk: () => {
-							navigate(`${APP_PREFIX_PATH}/partner/sales`);
-						}
+						content: '참여가 완료되었습니다. 신청 기간 내 세일 관리에서 상품/옵션을 선택해 세일을 등록해주세요.',
+						okText: '세일 관리로 이동',
+						onOk: () => navigate(`${APP_PREFIX_PATH}/partner/sales`),
 					});
-				} else if (isPointEvent) {
-					// POINT 안내 모달: 간단 안내(상세 고정 배너가 있으므로 축약)
-					const targetType = targetEvent?.pointEventTargetType;
-					const typeLabel2 =
-						targetType === 'PARTNER' ? '파트너 대상' :
-						targetType === 'PRODUCT' ? '상품 지정 대상' :
-						targetType === 'OPTION' ? '옵션 지정 대상' :
-						targetType === 'CATEGORY' ? '카테고리 지정 대상' :
-						targetType === 'MIN_ORDER_AMOUNT' ? '최소 주문금액 기준' :
-						'전체 대상';
-
-					Modal.info({
-						title: '참여 완료',
-						content: (
-							<Space direction="vertical" size={6}>
-								<span>{`[${targetEvent?.eventTitle || '이벤트'}]에 참여하셨습니다.`}</span>
-								<span>{`${typeLabel2}이 자동으로 적용됩니다.`}</span>
-							</Space>
-						),
-						okText: '확인'
-					});
-				}
-			} else {
-				if (isSaleEvent) {
-					const ok = await new Promise((resolve) => {
-						Modal.confirm({
-							title: '이벤트 참여 해제 확인',
-							content: (
-								<Space direction="vertical" size={8}>
-									<span>{`${targetEvent?.eventTitle || '이벤트'}의 연동 세일도 자동으로 비활성 처리됩니다.`}</span>
-								</Space>
-							),
-							okText: '해제하기',
-							cancelText: '취소',
-							onOk: () => resolve(true),
-							onCancel: () => resolve(false)
-						});
-					});
-					if (!ok) return;
-					await PartnerService.cancelEventParticipation(eventNo, { deactivateLinkedSales: true });
 				} else {
-					await PartnerService.cancelEventParticipation(eventNo);
+					message.success('이벤트 참여 신청이 완료되었습니다.');
 				}
-				message.success('이벤트 참여가 해제되었습니다.');
-			}
-
-			// SALE 이벤트는 `participating` 값이 "실제 sale_policy 존재 여부"에 의해 결정됩니다.
-			// 토글 직후 프론트에서 임의로 true/false를 넣지 않고, 서버 계산값으로 다시 동기화합니다.
-			if (isSaleEvent) {
-				await loadEvents();
+				if (isSaleEvent) {
+					await loadEvents();
+				} else {
+					updateEventParticipation(eventNo, true);
+				}
 			} else {
-				setEvents((prev) =>
-					prev.map((event) =>
-						event.eventNo === eventNo ? { ...event, participating: nextParticipating } : event
-					)
-				);
+				const ok = await new Promise((resolve) => {
+					Modal.confirm({
+						title: '이벤트 참여를 해제하시겠습니까?',
+						content: isSaleEvent
+							? '연동된 세일이 있으면 자동으로 비활성 처리됩니다.'
+							: '참여 해제 후 신청 기간 안에는 다시 신청할 수 있습니다.',
+						okText: '참여 해제',
+						okButtonProps: { danger: true },
+						cancelText: '취소',
+						onOk: () => resolve(true),
+						onCancel: () => resolve(false),
+					});
+				});
+				if (!ok) return;
+				await PartnerService.cancelEventParticipation(eventNo, { deactivateLinkedSales: isSaleEvent });
+				message.success('이벤트 참여가 해제되었습니다.');
+				if (isSaleEvent) {
+					await loadEvents();
+				} else {
+					updateEventParticipation(eventNo, false);
+				}
 			}
 		} catch (err) {
 			message.warning(err?.response?.data?.message || '요청 처리에 실패했습니다.');
 		} finally {
 			setActionLoading((prev) => ({ ...prev, [eventNo]: false }));
 		}
+	};
+
+	const openPerformance = (event) => {
+		navigate(`${APP_PREFIX_PATH}/partner/events/performance`, { state: { eventNo: event.eventNo } });
 	};
 
 	if (user && user.role !== 'PARTNER') {
@@ -245,293 +359,151 @@ const PartnerEvents = () => {
 		);
 	}
 
-	const columns = [
-		{
-			title: '이벤트명',
-			dataIndex: 'eventTitle',
-			key: 'eventTitle',
-			width: 280,
-			render: (value, record) => (
-				<Button type="link" style={{ padding: 0 }} onClick={() => setSelectedEvent(record)}>
-					{value || '-'}
-				</Button>
-			),
-		},
-		// 상태 뱃지는 유지 (간단 표시)
-		{
-			title: '상태',
-			dataIndex: 'eventStatus',
-			key: 'eventStatus',
-			width: 100,
-			render: (status) => <Tag>{STATUS_LABEL[status] || status || '-'}</Tag>,
-		},
-		// 기간/유형/작업 컬럼은 목록에서 비표시 (요청 반영)
-		// 상세 모달에서 기간/유형/신청/해제 가능
-		{
-			title: '파트너 신청 기간',
-			key: 'partnerPeriod',
-			width: 220,
-			render: (_, record) =>
-				`${formatDateOnly(record.partnerApplyStartAt)} ~ ${formatDateOnly(record.partnerApplyEndAt)}`,
-		},
-		{
-			title: '참여 상태',
-			key: 'participating',
-			width: 180,
-			render: (_, record) => {
-				const saleBadge =
-					record.eventType === 'SALE' && record.participationEnabled ? (
-						<Tag color={record.participating ? 'blue' : 'default'}>
-							{record.participating ? '세일 등록됨' : '세일 미등록'}
-						</Tag>
-					) : null;
-
-				let participationTag;
-				if (record.participationEnabled) {
-					participationTag = <Tag color="green">참여중</Tag>;
-				} else {
-					const windowState = getApplyWindowState(record);
-					participationTag = windowState.canToggle ? <Tag color="blue">신청 가능</Tag> : <Tag>미참여</Tag>;
-				}
-
-				// 대상 요약 배지
-				const t = record?.pointEventTargetType;
-				const targetLabel =
-					t === 'PARTNER' ? '파트너 대상' :
-					t === 'PRODUCT' ? '상품 지정' :
-					t === 'OPTION' ? '옵션 지정' :
-					t === 'CATEGORY' ? '카테고리' :
-					t === 'MIN_ORDER_AMOUNT' ? '최소주문금액' :
-					(record?.eventType === 'SALE' ? 'SALE' : '전체');
-				const targetBadge = <Tag color="default">{targetLabel}</Tag>;
-
-				return saleBadge ? <Space size={6}>{participationTag}{saleBadge}{targetBadge}</Space> : <Space size={6}>{participationTag}{targetBadge}</Space>;
-			},
-		},
-		// 필요 시 별도 컬럼으로 분리하려면 아래 주석 해제
-		// {
-		// 	title: '대상',
-		// 	key: 'targetSummary',
-		// 	width: 140,
-		// 	render: (_, record) => {
-		// 		const t = record?.pointEventTargetType;
-		// 		const label =
-		// 			t === 'PARTNER' ? '파트너 대상' :
-		// 			t === 'PRODUCT' ? '상품 지정' :
-		// 			t === 'OPTION' ? '옵션 지정' :
-		// 			t === 'CATEGORY' ? '카테고리' :
-		// 			t === 'MIN_ORDER_AMOUNT' ? '최소주문금액' :
-		// 			(record?.eventType === 'SALE' ? 'SALE' : '전체');
-		// 		return <Tag>{label}</Tag>;
-		// 	}
-		// },
-	];
-
 	return (
-		<Tabs
-			defaultActiveKey="participation"
-			items={[
-				{
-					key: 'participation',
-					label: '이벤트 참여',
-					children: (
-						<>
-							<Card
-								title="파트너 이벤트 참여"
-								extra={
-									<Button icon={<ReloadOutlined />} onClick={loadEvents} loading={loading}>
-										새로고침
-									</Button>
-								}
-							>
-								<Space direction="vertical" size={12} style={{ width: '100%' }}>
-									<Space size={8}>
-										<Button type={statusFilter === 'ALL' ? 'primary' : 'default'} onClick={() => setStatusFilter('ALL')}>전체</Button>
-										<Button type={statusFilter === 'ACTIVE' ? 'primary' : 'default'} onClick={() => setStatusFilter('ACTIVE')}>진행중</Button>
-										<Button type={statusFilter === 'SCHEDULED' ? 'primary' : 'default'} onClick={() => setStatusFilter('SCHEDULED')}>예정</Button>
-										<Button type={statusFilter === 'ENDED' ? 'primary' : 'default'} onClick={() => setStatusFilter('ENDED')}>종료</Button>
-									</Space>
-									{loading ? <Spin /> : (
-										<>
-											<div style={{ marginBottom: 8, color: '#666' }}>
-												{`총 ${totalItems}건 • 페이지 ${currentPage}/${Math.max(1, Math.ceil(totalItems / pageSize))}`}
-											</div>
-											<Table
-												rowKey="eventNo"
-												columns={columns}
-												dataSource={partnerEvents}
-												pagination={{
-													current: currentPage,
-													pageSize: pageSize,
-													total: totalItems,
-													showSizeChanger: true,
-													showTotal: (t) => `총 ${t}건`,
-													onChange: (p, s) => {
-														setCurrentPage(p);
-														setPageSize(s);
-													}
-												}}
-												locale={{ emptyText: <Text type="secondary">참여 가능한 이벤트가 없습니다.</Text> }}
-												scroll={{ x: 1200 }}
-											/>
-										</>
-									)}
-								</Space>
-							</Card>
-							<Modal
-								title={selectedEvent?.eventTitle || '이벤트 상세'}
-								open={Boolean(selectedEvent)}
-								onCancel={() => setSelectedEvent(null)}
-								footer={null}
-								width={680}
-							>
-								{selectedEvent && (
-									<Space direction="vertical" size={14} style={{ width: '100%' }}>
-										<div>
-											<Tag>{STATUS_LABEL[selectedEvent.eventStatus] || selectedEvent.eventStatus || '-'}</Tag>
-											<Tag>{EVENT_TYPE_LABEL[selectedEvent.eventType] || selectedEvent.eventType || '-'}</Tag>
-											<Tag color={selectedEvent.participationEnabled ? 'green' : 'default'}>
-												{selectedEvent.participationEnabled ? '참여중' : '미참여'}
-											</Tag>
-											{selectedEvent.eventType === 'SALE' && (
-												<Tag color={selectedEvent.participating ? 'blue' : 'default'}>
-													{selectedEvent.participating ? '세일 등록됨' : '세일 미등록'}
-												</Tag>
-											)}
-										</div>
-										<div>
-											<strong>고객 이벤트 기간</strong>
-											<div>{formatDateOnly(selectedEvent.customerEventStartAt)} ~ {formatDateOnly(selectedEvent.customerEventEndAt)}</div>
-										</div>
-										<div>
-											<strong>파트너 신청 기간</strong>
-											<div>{formatDateOnly(selectedEvent.partnerApplyStartAt)} ~ {formatDateOnly(selectedEvent.partnerApplyEndAt)}</div>
-										</div>
-										{selectedEvent.eventType === 'SALE' && (
-											<Alert
-												type="warning"
-												showIcon
-												message="신청 기간 내 세일 등록 필수"
-												description="참여 신청만으로는 할인 적용이 되지 않습니다. 신청 기간 내에 세일 등록 페이지에서 상품/옵션을 선택해 등록해야 합니다."
-											/>
-										)}
-										{selectedEvent.eventType === 'POINT' && (
-											<Alert
-												type="info"
-												showIcon
-												message="포인트 이벤트 안내"
-												description="추가 포인트는 고객 1인당 최대 3회(주문 기준) 지급됩니다."
-											/>
-										)}
-										{selectedEvent.eventType === 'SALE' && (
-											<div>
-												<strong>관리자 세일 기준</strong>
-												<div>{DISCOUNT_TYPE_LABEL[selectedEvent.saleDiscountType] || selectedEvent.saleDiscountType || '-'}</div>
-												<div>
-													할인 값: {
-														selectedEvent.saleDiscountType === 'PERCENT'
-															? `${Number(selectedEvent.saleDiscountValue || 0)}%`
-															: `${Number(selectedEvent.saleDiscountValue || 0).toLocaleString()}원`
-													}
-												</div>
-												<div>
-													최대 할인 금액: {
-														selectedEvent.saleMaxDiscountAmount
-															? `${Number(selectedEvent.saleMaxDiscountAmount).toLocaleString()}원`
-															: '-'
-													}
-												</div>
-											</div>
-										)}
-										{selectedEvent.eventType === 'POINT' && (
-											<div>
-												<strong>포인트 대상</strong>
-												<div>
-													{(() => {
-														const t = selectedEvent?.pointEventTargetType;
-														const vals = Array.isArray(selectedEvent?.pointEventTargetValues) ? selectedEvent.pointEventTargetValues : [];
-														if (t === 'ALL' || !t) return '전체(ALL)';
-														if (t === 'PRODUCT' && vals.length) return `선택 대상: 상품 #${vals.slice(0, 8).join(', #')}${vals.length > 8 ? ' …' : ''}`;
-														if (t === 'OPTION' && vals.length) return `선택 대상: 옵션 #${vals.slice(0, 8).join(', #')}${vals.length > 8 ? ' …' : ''}`;
-														if (t === 'CATEGORY' && vals.length) return `카테고리: ${vals.slice(0, 8).map(toKoCategory).join(', ')}${vals.length > 8 ? ' …' : ''}`;
-														if (t === 'MIN_ORDER_AMOUNT' && selectedEvent?.pointEventMinOrderAmount != null) {
-															return `최소 주문금액: ${Number(selectedEvent.pointEventMinOrderAmount).toLocaleString()}원 이상`;
-														}
-														return '-';
-													})()}
-												</div>
-											</div>
-										)}
-										<div>
-											<strong>이벤트 내용</strong>
-											<div style={{ whiteSpace: 'pre-wrap' }}>{selectedEvent.eventContent || '-'}</div>
-										</div>
-										{(() => {
-											const isParticipating = Boolean(selectedEvent?.participationEnabled);
-											const t = selectedEvent?.pointEventTargetType;
-											const typeLabel =
-												t === 'PARTNER' ? '파트너 대상' :
-												t === 'PRODUCT' ? '상품 지정 대상' :
-												t === 'OPTION' ? '옵션 지정 대상' :
-												t === 'CATEGORY' ? '카테고리 지정 대상' :
-												t === 'MIN_ORDER_AMOUNT' ? '최소 주문금액 기준' :
-												'전체 대상';
-											return isParticipating ? (
-												<Alert
-													type="success"
-													showIcon
-													message="참여 안내"
-													description={`[${selectedEvent?.eventTitle || '이벤트'}]에 참여하셨습니다. ${typeLabel}이 자동으로 적용됩니다.`}
-												/>
-											) : null;
-										})()}
-										<div style={{ textAlign: 'right' }}>
-											{(() => {
-												const windowState = getApplyWindowState(selectedEvent);
-												const disabled = !windowState.canToggle;
-												const rowLoading = Boolean(actionLoading[selectedEvent.eventNo]);
-												return selectedEvent.participationEnabled ? (
-													<Button
-														danger
-														disabled={disabled}
-														loading={rowLoading}
-														onClick={async () => {
-															await handleToggleParticipation(selectedEvent.eventNo, false);
-															setSelectedEvent((prev) =>
-																prev ? { ...prev, participationEnabled: false, participating: false } : prev
-															);
-														}}
-													>
-														참여 해제
-													</Button>
-												) : (
-													<Button
-														type="primary"
-														disabled={disabled}
-														loading={rowLoading}
-														onClick={async () => {
-															await handleToggleParticipation(selectedEvent.eventNo, true);
-															setSelectedEvent((prev) => (prev ? { ...prev, participationEnabled: true } : prev));
-														}}
-													>
-														참여 신청
-													</Button>
-												);
-											})()}
-										</div>
-									</Space>
-								)}
-							</Modal>
-						</>
-					)
-				},
-				{
-					key: 'performance',
-					label: '이벤트 실적(종료)',
-					children: (<PartnerEventPerformance />)
+		<>
+			<Row gutter={16}>
+				<Col xs={12} md={6}>
+					<Card><span className="text-muted">전체 이벤트</span><h2 className="mb-0">{summary.total}</h2></Card>
+				</Col>
+				<Col xs={12} md={6}>
+					<Card><span className="text-muted">신청 가능</span><h2 className="mb-0">{summary.applyOpen}</h2></Card>
+				</Col>
+				<Col xs={12} md={6}>
+					<Card><span className="text-muted">참여 중</span><h2 className="mb-0">{summary.participating}</h2></Card>
+				</Col>
+				<Col xs={12} md={6}>
+					<Card><span className="text-muted">종료</span><h2 className="mb-0">{summary.ended}</h2></Card>
+				</Col>
+			</Row>
+
+			<Card
+				extra={
+					<Space wrap>
+						<Select value={statusFilter} style={{ minWidth: 140 }} onChange={setStatusFilter}>
+							<Option value="ALL">전체 상태</Option>
+							<Option value="PUBLISHED">공개</Option>
+							<Option value="ENDED">종료</Option>
+						</Select>
+						<Button icon={<ReloadOutlined />} onClick={loadEvents} loading={loading}>
+							새로고침
+						</Button>
+					</Space>
 				}
-			]}
-		/>
+			>
+				<Spin spinning={loading}>
+					{partnerEvents.length === 0 ? (
+						<Empty description="참여 가능한 이벤트가 없습니다." />
+					) : (
+						<>
+							<Row gutter={[16, 16]}>
+								{partnerEvents.map((event) => (
+									<Col xs={24} lg={12} xl={8} key={event.eventNo}>
+										<EventCard
+											event={event}
+											actionLoading={actionLoading}
+											onOpenDetail={setSelectedEvent}
+											onToggleParticipation={handleToggleParticipation}
+											onOpenPerformance={openPerformance}
+										/>
+									</Col>
+								))}
+							</Row>
+							<div className="d-flex justify-content-between align-items-center mt-3">
+								<Text type="secondary">{`총 ${totalItems}건`}</Text>
+								<Space>
+									<Button disabled={currentPage <= 1} onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}>
+										이전
+									</Button>
+									<Text>{`${currentPage} / ${Math.max(1, Math.ceil(totalItems / pageSize))}`}</Text>
+									<Button
+										disabled={currentPage >= Math.max(1, Math.ceil(totalItems / pageSize))}
+										onClick={() => setCurrentPage((prev) => prev + 1)}
+									>
+										다음
+									</Button>
+								</Space>
+							</div>
+						</>
+					)}
+				</Spin>
+			</Card>
+
+			<Modal
+				title={selectedEvent?.eventTitle || '이벤트 상세'}
+				open={Boolean(selectedEvent)}
+				onCancel={() => setSelectedEvent(null)}
+				footer={null}
+				width={720}
+			>
+				{selectedEvent && (
+					<Space direction="vertical" size={14} style={{ width: '100%' }}>
+						<div>
+							<Tag color={STATUS_COLORS[selectedEvent.eventStatus] || 'default'}>
+								{STATUS_LABELS[selectedEvent.eventStatus] || selectedEvent.eventStatus || '-'}
+							</Tag>
+							<Tag>{EVENT_TYPE_LABELS[selectedEvent.eventType] || selectedEvent.eventType || '-'}</Tag>
+							<Tag color={getParticipationStatus(selectedEvent).color}>
+								{getParticipationStatus(selectedEvent).label}
+							</Tag>
+						</div>
+						<div>
+							<strong>파트너 신청 기간</strong>
+							<div>{formatDate(selectedEvent.partnerApplyStartAt)} ~ {formatDate(selectedEvent.partnerApplyEndAt)}</div>
+						</div>
+						<div>
+							<strong>이벤트 기간</strong>
+							<div>{formatDate(selectedEvent.customerEventStartAt)} ~ {formatDate(selectedEvent.customerEventEndAt)}</div>
+						</div>
+						{selectedEvent.eventType === 'SALE' && (
+							<Alert
+								type="warning"
+								showIcon
+								message="신청 기간 내 세일 등록 필수"
+								description="참여 신청만으로는 할인 적용이 되지 않습니다. 세일 관리에서 상품/옵션을 선택해 등록해야 합니다."
+							/>
+						)}
+						{selectedEvent.eventType === 'POINT' && (
+							<Alert
+								type="info"
+								showIcon
+								message="포인트 이벤트 안내"
+								description={`이벤트 유형: ${getTargetSummary(selectedEvent)}`}
+							/>
+						)}
+						{selectedEvent.eventType === 'SALE' && (
+							<div>
+								<strong>세일 기준</strong>
+								<div>{DISCOUNT_TYPE_LABELS[selectedEvent.saleDiscountType] || selectedEvent.saleDiscountType || '-'}</div>
+								<div>
+									할인 값: {selectedEvent.saleDiscountType === 'PERCENT'
+										? `${Number(selectedEvent.saleDiscountValue || 0)}%`
+										: `${Number(selectedEvent.saleDiscountValue || 0).toLocaleString()}원`}
+								</div>
+								<div>
+									최대 할인 금액: {selectedEvent.saleMaxDiscountAmount
+										? `${Number(selectedEvent.saleMaxDiscountAmount).toLocaleString()}원`
+										: '-'}
+								</div>
+							</div>
+						)}
+						<div>
+							<strong>이벤트 내용</strong>
+							<div style={{ whiteSpace: 'pre-wrap' }}>{selectedEvent.eventContent || '-'}</div>
+						</div>
+						<div className="text-right">
+							<EventActions
+								event={selectedEvent}
+								actionLoading={actionLoading}
+								showDetail={false}
+								onOpenDetail={setSelectedEvent}
+								onToggleParticipation={handleToggleParticipation}
+								onOpenPerformance={openPerformance}
+							/>
+						</div>
+					</Space>
+				)}
+			</Modal>
+		</>
 	);
 };
 

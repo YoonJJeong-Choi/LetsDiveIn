@@ -40,23 +40,19 @@ export const Logo = ({ mobileLogo, logoType }) => {
 		}
 	}
 	
-	const getLogo = () => {
-		if(logoType === 'light') {
-			if(navCollapsed) {
-			return '/img/logo-sm-white.png'
-			}
-			return '/img/logo-white.png'
-		}
-	
-		if (navCollapsed) {
-			return '/img/logo-sm.png'
-		}
-		return '/img/logo.png'
-	}
+	const logoWidth = navCollapsed ? 36 : 140;
 
 	return (
 		<LogoWrapper className={isMobile && !mobileLogo ? 'd-none' : 'logo'} style={{width: `${getLogoWidthGutter()}`}}>
-			<img src={getLogo()} alt={`${APP_NAME} logo`}/>
+			<img
+				src="/img/LetsDiveIn03.png"
+				alt={`${APP_NAME} logo`}
+				style={{
+					width: logoWidth,
+					maxHeight: 40,
+					objectFit: 'contain',
+				}}
+			/>
 		</LogoWrapper>
 	)
 }

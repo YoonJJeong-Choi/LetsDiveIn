@@ -417,11 +417,9 @@ const PartnerSettings = () => {
 									<TextArea rows={4} maxLength={1000} showCount />
 								</Form.Item>
 							</Col>
-							<Col xs={24}>
-								<Form.Item name="profileImageUrl" label="프로필 이미지 URL">
-									<Input placeholder="업로드로 설정됩니다" readOnly />
-								</Form.Item>
-							</Col>
+							<Form.Item name="profileImageUrl" hidden>
+								<Input type="hidden" />
+							</Form.Item>
 						</Row>
 
 						<Space>

@@ -5,7 +5,7 @@ import Products12 from "@/components/products/Products12";
 import React, { Suspense } from "react";
 
 export const metadata = {
-  title: "쇼핑 || Swim Mall",
+  title: "쇼핑 || Let’s Dive In",
   description: "상품 목록",
 };
 

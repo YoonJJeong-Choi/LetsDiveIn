@@ -1,12 +1,72 @@
 "use client";
-import { products } from "@/data/products";
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Pagination } from "swiper/modules";
 import { Swiper, SwiperSlide } from "swiper/react";
 import ProductCard1 from "../productCards/ProductCard1";
 import Link from "next/link";
+import { getActiveProductList, searchProducts } from "@/lib/api/product";
+import { mapApiProductToCard } from "@/lib/product/mapApiProductToCard";
 
 export default function SearchProducts() {
+  const params = useSearchParams();
+  const brandFromUrl = params.get("brand") || "";
+  const [keyword, setKeyword] = useState("");
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
+  const [brandLabel, setBrandLabel] = useState("");
+
+  useEffect(() => {
+    let aborted = false;
+    const fetchInitial = async () => {
+      try {
+        setLoading(true);
+        if (brandFromUrl) {
+          setBrandLabel(brandFromUrl);
+          const resp = await searchProducts({ partnerBrandCode: brandFromUrl, page: 1, size: 40 });
+          const payload = resp?.data || resp;
+          const raw = Array.isArray(payload?.items) ? payload.items : [];
+          const mapped = await Promise.all(raw.map(mapApiProductToCard));
+          if (!aborted) { setItems(mapped); setSearched(true); }
+        } else {
+          const resp = await getActiveProductList({ page: 1, size: 12 });
+          const payload = resp?.data || resp;
+          const raw = Array.isArray(payload?.items) ? payload.items : [];
+          const mapped = await Promise.all(raw.map(mapApiProductToCard));
+          if (!aborted) setItems(mapped);
+        }
+      } catch (e) {
+        if (!aborted) setItems([]);
+      } finally {
+        if (!aborted) setLoading(false);
+      }
+    };
+    fetchInitial();
+    return () => {
+      aborted = true;
+    };
+  }, [brandFromUrl]);
+
+  const onSearch = async () => {
+    const q = keyword.trim();
+    if (!q) return;
+    try {
+      setLoading(true);
+      const resp = await searchProducts({ keyword: q, page: 1, size: 12 });
+      const payload = resp?.data || resp;
+      const raw = Array.isArray(payload?.items) ? payload.items : [];
+      const mapped = await Promise.all(raw.map(mapApiProductToCard));
+      setItems(mapped);
+      setSearched(true);
+    } catch (e) {
+      setItems([]);
+      setSearched(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <>
       {/* search */}
@@ -16,18 +76,21 @@ export default function SearchProducts() {
             <div className="col-xl-6">
               <form
                 className="form-search"
-                onSubmit={(e) => e.preventDefault()}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  onSearch();
+                }}
               >
                 <fieldset className="text">
                   <input
                     type="text"
-                    placeholder="Searching..."
+                    placeholder="상품명, 브랜드 등을 검색하세요"
                     className=""
                     name="text"
                     tabIndex={0}
-                    defaultValue=""
+                    value={keyword}
+                    onChange={(e) => setKeyword(e.target.value)}
                     aria-required="true"
-                    required
                   />
                 </fieldset>
                 <button className="" type="submit">
@@ -57,19 +120,18 @@ export default function SearchProducts() {
                 </button>
               </form>
               <div className="tf-col-quicklink">
-                <span className="title">Quick link:</span>
-                <Link className="link" href={`/shop-default-grid`}>
-                  Fashion
+                <span className="title">빠른 검색:</span>
+                <Link className="link" href={`/search-result?brand=SPEEDO`}>
+                  SPEEDO
+                </Link>
+                ,
+                <Link className="link" href={`/search-result?brand=ARENA`}>
+                  ARENA
                 </Link>
                 ,
                 <Link className="link" href={`/shop-default-grid`}>
-                  Men
+                  전체 상품
                 </Link>
-                ,
-                <Link className="link" href={`/shop-default-grid`}>
-                  Women
-                </Link>
-                ,
               </div>
             </div>
           </div>
@@ -80,8 +142,14 @@ export default function SearchProducts() {
       <section className="flat-spacing pt-0">
         <div className="container">
           <div className="heading-section text-center wow fadeInUp">
-            <h3 className="heading">Product Recent</h3>
+            <h3 className="heading">
+              {brandLabel ? `${brandLabel}` : searched ? "검색 결과" : "최신 상품"}
+            </h3>
           </div>
+          {loading ? <p className="text-center">검색 중...</p> : null}
+          {!loading && searched && items.length === 0 ? (
+            <p className="text-center">검색 결과가 없습니다.</p>
+          ) : null}
           <Swiper
             className="swiper tf-sw-latest"
             dir="ltr"
@@ -98,7 +166,7 @@ export default function SearchProducts() {
               el: ".spd4",
             }}
           >
-            {products.slice(0, 4).map((product, i) => (
+            {items.slice(0, 12).map((product, i) => (
               <SwiperSlide key={i} className="swiper-slide">
                 <ProductCard1 product={product} />
               </SwiperSlide>

@@ -15,6 +15,7 @@ import com.swimshop.swim_mall.order.repository.OrderRepository;
 import com.swimshop.swim_mall.payment.PaymentEntity;
 import com.swimshop.swim_mall.payment.PaymentRepository;
 import com.swimshop.swim_mall.payment.dto.PaymentApproveRequestDto;
+import com.swimshop.swim_mall.payment.enums.PaymentStatus;
 import com.swimshop.swim_mall.payment.dto.PaymentResponseDto;
 
 import jakarta.servlet.http.HttpSession;
@@ -108,6 +109,7 @@ public class PaymentService {
         PaymentEntity payment = PaymentEntity.builder()
                 .paymentAmount(serverAmount)
                 .paymentMethod(order.getPaymentMethod())
+                .status(PaymentStatus.PAID)
                 .paidAt(paidAt) // 결제 승인 시점 기록
                 .build();
         payment = paymentRepository.save(payment);
@@ -170,23 +172,11 @@ public class PaymentService {
             }
             throw new BusinessException(ErrorCode.INVALID_REQUEST, errorMessage);
         }
-        
-        // 결제 실패: Payment 레코드 생성 (실패 기록, failReason 포함)
-        PaymentEntity payment = PaymentEntity.builder()
-                .paymentAmount(order.getOrderTotalPrice())
-                .paymentMethod(order.getPaymentMethod())
-                .failReason(reason != null ? reason.trim() : "결제 실패")
-                .build();
-        payment = paymentRepository.save(payment);
-        
-        // 양방향 관계 설정: Order에 Payment 연결
-        order.setPayment(payment);
-        
-        // 주문 상태 업데이트: PENDING_PAYMENT → PAYMENT_FAILED
-        order.updateStatus(OrderStatus.PAYMENT_FAILED);
-        orderRepository.save(order);
+
+        recordPaymentFailureInternal(order, reason);
         
         // 응답 DTO 생성 (결제 상태는 주문 상태에서 파생)
+        PaymentEntity payment = order.getPayment();
         return PaymentResponseDto.builder()
                 .paymentNo(payment.getPaymentNo())
                 .orderNo(order.getOrderNo())
@@ -198,6 +188,30 @@ public class PaymentService {
                 .paidAt(payment.getPaidAt()) // 결제 실패 시 null
                 .paymentCancelYn(payment.getPaymentCancelYn())
                 .build();
+    }
+
+    /**
+     * 토스 승인 실패·내부 호출용 — 세션 검증 없이 결제 실패 기록 (PENDING_PAYMENT만).
+     */
+    @Transactional
+    public void recordPaymentFailureInternal(OrderEntity order, String reason) {
+        OrderStatus currentStatus = order.getOrderStatus();
+        if (currentStatus != OrderStatus.PENDING_PAYMENT) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST,
+                    "결제 대기 상태만 결제 실패 처리할 수 있습니다. (현재: " + currentStatus.getLabel() + ")");
+        }
+
+        PaymentEntity payment = PaymentEntity.builder()
+                .paymentAmount(order.getOrderTotalPrice())
+                .paymentMethod(order.getPaymentMethod())
+                .status(PaymentStatus.FAILED)
+                .failReason(reason != null ? reason.trim() : "결제 실패")
+                .build();
+        payment = paymentRepository.save(payment);
+
+        order.setPayment(payment);
+        order.updateStatus(OrderStatus.PAYMENT_FAILED);
+        orderRepository.save(order);
     }
     
     /**

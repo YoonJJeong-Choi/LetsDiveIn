@@ -44,11 +44,9 @@ export default function Points() {
     }
   };
 
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat("ko-KR", {
-      style: "currency",
-      currency: "KRW",
-    }).format(amount || 0);
+  const formatPoint = (amount) => {
+    const value = Number(amount || 0);
+    return `${value.toLocaleString("ko-KR")}점`;
   };
 
   const formatDate = (dateString) => {
@@ -94,13 +92,13 @@ export default function Points() {
   return (
     <div className="my-account-content">
       <div className="my-account-content-header">
-        <h3 className="heading">포인트</h3>
+        <h5 className="mb-4">포인트</h5>
       </div>
 
       {loading ? (
         <div className="text-center py-5">
           <div className="spinner-border" role="status">
-            <span className="visually-hidden">Loading...</span>
+            <span className="visually-hidden">불러오는 중...</span>
           </div>
         </div>
       ) : (
@@ -108,13 +106,10 @@ export default function Points() {
           {/* 포인트 잔액 카드 */}
           <div className="card mb-4">
             <div className="card-body">
-              <h5 className="card-title mb-3">현재 포인트 잔액</h5>
-              <div className="display-4 fw-bold text-primary">
-                {formatCurrency(pointBalance || 0)}
+              <h5 className="card-title mb-2" style={{ fontSize: "18px" }}>현재 포인트 잔액</h5>
+              <div className="fw-bold text-primary" style={{ fontSize: "28px", lineHeight: 1.2 }}>
+                {formatPoint(pointBalance || 0)}
               </div>
-              <p className="text-muted mt-2 mb-0">
-                포인트는 구매확정 시 자동으로 적립되며, 주문 결제 시 사용할 수 있습니다.
-              </p>
             </div>
           </div>
 
@@ -151,10 +146,10 @@ export default function Points() {
                           </td>
                           <td className={`text-end fw-bold ${getPointTypeColor(history.pointType, history.pointAmount)}`}>
                             {history.pointAmount > 0 ? "+" : ""}
-                            {formatCurrency(history.pointAmount)}
+                            {formatPoint(history.pointAmount)}
                           </td>
                           <td className="text-end">
-                            {formatCurrency(history.pointBalanceAfter)}
+                            {formatPoint(history.pointBalanceAfter)}
                           </td>
                           <td>
                             <div>{history.description || "-"}</div>

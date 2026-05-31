@@ -35,6 +35,13 @@ public class ProductCreateRequestDto {
     
     @NotBlank(message = "상품 이미지 URL은 필수입니다.")
     private String productImageUrl;
+
+    private String materialInfo;
+    private String originCountry;
+    private String manufactureCountry;
+    private String careInstructions;
+    private String sizeGuideText;
+    private String sizeGuideJson;
     
     @NotNull(message = "옵션 목록은 필수입니다.")
     @Size(min = 1, message = "최소 1개 이상의 옵션이 필요합니다.")

@@ -1,22 +1,19 @@
 import Footer1 from "@/components/footers/Footer1";
 import Header1 from "@/components/headers/Header1";
-import Topbar6 from "@/components/headers/Topbar6";
 import AccountSidebar from "@/components/my-account/AccountSidebar";
 import Information from "@/components/my-account/Information";
-import Orers from "@/components/my-account/Orers";
+import Orders from "@/components/my-account/Orders";
 import Link from "next/link";
 import React from "react";
 
 export const metadata = {
-  title:
-    "My Account Orders || Modave - Multipurpose React Nextjs eCommerce Template",
-  description: "Modave - Multipurpose React Nextjs eCommerce Template",
+  title: "주문 내역 || Let’s Dive In",
+  description: "내 주문 내역 조회",
 };
 
 export default function MyAccountOrdersPage() {
   return (
     <>
-      <Topbar6 bgColor="bg-main" />
       <Header1 />
       <>
         {/* page-title */}
@@ -27,11 +24,11 @@ export default function MyAccountOrdersPage() {
           <div className="container-full">
             <div className="row">
               <div className="col-12">
-                <h3 className="heading text-center">My Account</h3>
+                <h3 className="heading text-center">마이페이지</h3>
                 <ul className="breadcrumbs d-flex align-items-center justify-content-center">
                   <li>
                     <Link className="link" href={`/`}>
-                      Homepage
+                      홈
                     </Link>
                   </li>
                   <li>
@@ -39,13 +36,13 @@ export default function MyAccountOrdersPage() {
                   </li>
                   <li>
                     <a className="link" href="#">
-                      Pages
+                      마이페이지
                     </a>
                   </li>
                   <li>
                     <i className="icon-arrRight" />
                   </li>
-                  <li>My Account</li>
+                  <li>주문 내역</li>
                 </ul>
               </div>
             </div>
@@ -63,7 +60,7 @@ export default function MyAccountOrdersPage() {
         <div className="container">
           <div className="my-account-wrap">
             <AccountSidebar />
-            <Orers />
+            <Orders />
           </div>
         </div>
       </section>

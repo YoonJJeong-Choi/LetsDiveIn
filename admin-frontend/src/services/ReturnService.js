@@ -28,16 +28,21 @@ ReturnService.getReturn = function (returnNo) {
 }
 
 /**
- * 관리자 반품 AI 보조 결과 조회 (관리자 전용)
+ * 관리자 반품 검토 보조 (규칙 기반, 관리자 전용)
  * @param {Number} returnNo - 반품 번호
- * @returns {Promise} AI 보조 결과
  */
-ReturnService.getReturnAiAssist = function (returnNo) {
+ReturnService.getReturnAssist = function (returnNo) {
 	return fetch({
-		url: `/returns/${returnNo}/ai-assist`,
+		url: `/returns/${returnNo}/return-assist`,
 		method: 'get'
 	})
 }
+
+/** @deprecated {@link ReturnService.getReturnAssist} */
+ReturnService.getReturnReviewAssist = ReturnService.getReturnAssist
+
+/** @deprecated {@link ReturnService.getReturnAssist} */
+ReturnService.getReturnAiAssist = ReturnService.getReturnAssist
 
 /**
  * 반품 상태 변경 (관리자/파트너용)

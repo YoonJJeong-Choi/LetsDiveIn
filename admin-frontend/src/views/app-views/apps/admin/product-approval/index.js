@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, Table, Button, Modal, Input, Form, message, Tag, Space, Row, Col, Alert, Statistic, Descriptions, Spin, Tabs, Badge } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined, InfoCircleOutlined, ShoppingOutlined } from '@ant-design/icons';
 import AdminService from 'services/AdminService';
@@ -6,6 +7,7 @@ import AdminService from 'services/AdminService';
 const { TextArea } = Input;
 
 const ProductApproval = () => {
+	const [searchParams, setSearchParams] = useSearchParams();
 	const [allProducts, setAllProducts] = useState([]); // 구형: 전체 목록(임시 유지)
 	const [products, setProducts] = useState([]); // 테이블 표시용 (서버 페이지네이션 items)
 	const [loading, setLoading] = useState(false);
@@ -98,6 +100,25 @@ const ProductApproval = () => {
 		fetchStatusCounts();
 	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [currentPage, pageSize, statusFilter, approvalSubFilter]);
+
+	useEffect(() => {
+		const a = (searchParams.get('approval') || '').toLowerCase();
+		if (!a) return;
+		if (a === 'pending') {
+			setStatusFilter('PENDING_APPROVAL');
+			setApprovalSubFilter('PENDING');
+			return;
+		}
+		if (a === 'update') {
+			setStatusFilter('PENDING_APPROVAL');
+			setApprovalSubFilter('PENDING_UPDATE');
+			return;
+		}
+		if (a === 'all') {
+			setStatusFilter('PENDING_APPROVAL');
+			setApprovalSubFilter('PENDING');
+		}
+	}, [searchParams]);
 
 	const fetchStatusCounts = async () => {
 		try {
@@ -338,7 +359,11 @@ const ProductApproval = () => {
 							label: `수정 (${pendingUpdateCount})`,
 						},
 					]}
-					onChange={(key) => setApprovalSubFilter(key)}
+					onChange={(key) => {
+						setApprovalSubFilter(key);
+						const ap = key === 'PENDING_UPDATE' ? 'update' : 'pending';
+						setSearchParams({ approval: ap }, { replace: true });
+					}}
 					style={{ marginBottom: 16 }}
 				/>
 			),
@@ -360,11 +385,14 @@ const ProductApproval = () => {
 	const handleTabChange = (key) => {
 		if (key === 'ALL') {
 			setStatusFilter(null);
+			setSearchParams({}, { replace: true });
 		} else if (key === 'PENDING_APPROVAL') {
 			setStatusFilter('PENDING_APPROVAL');
-			setApprovalSubFilter('PENDING'); // 기본값으로 등록 탭 선택
+			setApprovalSubFilter('PENDING');
+			setSearchParams({ approval: 'all' }, { replace: true });
 		} else {
 			setStatusFilter(key);
+			setSearchParams({}, { replace: true });
 		}
 	};
 

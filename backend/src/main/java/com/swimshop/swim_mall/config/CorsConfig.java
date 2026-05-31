@@ -17,11 +17,11 @@ public class CorsConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        // 개발 환경: 여러 포트 허용 (3000, 3003 등)
-        config.setAllowedOrigins(List.of(
-            "http://localhost:3000",
-            "http://localhost:3001"
-        ));
+        // 개발: localhost / 127.0.0.1·포트 혼용 시에도 동일하게 허용 (브라우저 Origin 문자열이 달라짐)
+        // credentials 사용 시 와일드카드 Origin 불가 → 패턴 사용
+        config.setAllowedOriginPatterns(List.of(
+                "http://localhost:*",
+                "http://127.0.0.1:*"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

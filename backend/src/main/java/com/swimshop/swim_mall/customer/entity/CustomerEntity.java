@@ -181,13 +181,6 @@ public class CustomerEntity {
     }
 
     /**
-     * 포인트 잔액 업데이트
-     */
-    public void updatePointBalance(Long pointBalance) {
-        this.pointBalance = pointBalance != null ? pointBalance : 0L;
-    }
-
-    /**
      * 포인트 추가
      */
     public void addPoint(Long amount) {

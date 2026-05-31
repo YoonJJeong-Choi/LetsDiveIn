@@ -1,26 +1,51 @@
 import Footer1 from "@/components/footers/Footer1";
 import Header1 from "@/components/headers/Header1";
-import Topbar6 from "@/components/headers/Topbar6";
 import Contact2 from "@/components/otherPages/Contact2";
+import { STORE_MAP_EMBED_URL } from "@/data/storeContact";
+import Link from "next/link";
 import React from "react";
 
 export const metadata = {
-  title: "Contact || Modave - Multipurpose React Nextjs eCommerce Template",
-  description: "Modave - Multipurpose React Nextjs eCommerce Template",
+  title: "찾아오시는 길 || Let’s Dive In",
+  description: "Let’s Dive In 위치·연락처·문의",
 };
 
 export default function ContactPage() {
   return (
     <>
-      <Topbar6 bgColor="bg-main" />
       <Header1 />
+      <div
+        className="page-title"
+        style={{ backgroundImage: "url(/images/section/page-title.jpg)" }}
+      >
+        <div className="container-full">
+          <div className="row">
+            <div className="col-12">
+              <h3 className="heading text-center">찾아오시는 길</h3>
+              <ul className="breadcrumbs d-flex align-items-center justify-content-center">
+                <li>
+                  <Link className="link" href="/">
+                    홈
+                  </Link>
+                </li>
+                <li>
+                  <i className="icon-arrRight" />
+                </li>
+                <li>찾아오시는 길</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
       <iframe
-        src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3023.712380803123!2d-74.00594108459235!3d40.712775279328264!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x89c25a3168ef8b1f%3A0xe28a875ee38c8ed1!2sNew+York%2C+NY%2C+USA!5e0!3m2!1sen!2s!4v1617203294845!5m2!1sen!2s"
+        title="지도"
+        src={STORE_MAP_EMBED_URL}
         width={600}
         height={450}
         style={{ border: 0, width: "100%" }}
         allowFullScreen=""
         loading="lazy"
+        referrerPolicy="no-referrer-when-downgrade"
       />
       <Contact2 />
       <Footer1 />

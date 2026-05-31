@@ -1,5 +1,7 @@
 package com.swimshop.swim_mall.delivery.repository;
 
+import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -8,11 +10,41 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import com.swimshop.swim_mall.common.enums.DeliveryStatus;
+import com.swimshop.swim_mall.common.enums.OrderStatus;
 import com.swimshop.swim_mall.delivery.entity.DeliveryEntity;
 
 @Repository
 public interface DeliveryRepository extends JpaRepository<DeliveryEntity, Long> {
-    
+
+    /**
+     * 배송 준비(READY) 상태인데 발주 확인 후 일정 시간이 지난 건 (출고 지연 의심)
+     */
+    @Query("SELECT COUNT(d) FROM DeliveryEntity d JOIN d.orderItem oi JOIN oi.order o WHERE d.deliveryStatus = :ready "
+            + "AND oi.isCancelled = false AND o.orderStatus IN :orderStatuses "
+            + "AND oi.confirmedAt IS NOT NULL AND oi.confirmedAt < :before")
+    long countReadyDeliveryConfirmedBefore(
+            @Param("ready") DeliveryStatus ready,
+            @Param("orderStatuses") List<OrderStatus> orderStatuses,
+            @Param("before") LocalDateTime before);
+
+    /**
+     * 파트너 라인만: 배송 준비(READY)인데 발주 확인 후 일정 시간이 지난 건(출고 지연 의심)
+     */
+    @Query("SELECT COUNT(d) FROM DeliveryEntity d JOIN d.orderItem oi JOIN oi.order o "
+            + "LEFT JOIN oi.option opt LEFT JOIN oi.product prod "
+            + "LEFT JOIN opt.partner optP LEFT JOIN prod.partner prodP "
+            + "WHERE d.deliveryStatus = :ready "
+            + "AND oi.isCancelled = false AND o.orderStatus IN :orderStatuses "
+            + "AND oi.confirmedAt IS NOT NULL AND oi.confirmedAt < :before "
+            + "AND ((opt IS NOT NULL AND optP.partnerId = :partnerId) "
+            + "OR (opt IS NULL AND prodP.partnerId = :partnerId))")
+    long countReadyDeliveryConfirmedBeforeForPartner(
+            @Param("ready") DeliveryStatus ready,
+            @Param("orderStatuses") Collection<OrderStatus> orderStatuses,
+            @Param("before") LocalDateTime before,
+            @Param("partnerId") Long partnerId);
+
     /**
      * 주문 아이템 번호로 배송 조회
      */

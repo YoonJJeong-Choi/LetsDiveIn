@@ -19,17 +19,17 @@ export class Faq extends Component {
 				<PageHeaderAlt className="bg-primary" overlap>
 					<div className="container text-center">
 						<div className="py-lg-4">
-							<h1 className="text-white display-4">Search for Solution</h1>
+							<h1 className="text-white display-4">도움말</h1>
 							<Row type="flex" justify="center">
 								<Col xs={24} sm={24} md={12}>
 									<p className="text-white w-75 text-center mt-2 mb-4 mx-auto">
-										Look at these words. Are they small words? And he referred to my words - if they're small, something else must be small..
+										관리자와 파트너가 자주 확인하는 운영 절차와 주의사항을 정리했습니다.
 									</p>
 								</Col>
 							</Row>
 							<Row type="flex" justify="center" className="mb-5">
 								<Col xs={24} sm={24} md={12}>
-									<Input placeholder="Search" prefix={<SearchOutlined type="search" />}/>
+									<Input placeholder="도움말 검색" prefix={<SearchOutlined type="search" />}/>
 								</Col>
 							</Row>
 						</div>

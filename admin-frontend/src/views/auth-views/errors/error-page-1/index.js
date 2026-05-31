@@ -1,10 +1,10 @@
 import React from 'react'
 import { Button, Row, Col } from "antd";
 import { ArrowLeftOutlined } from '@ant-design/icons';
-import { APP_NAME } from 'configs/AppConfig';
 import { Link } from 'react-router-dom';
 import Flex from 'components/shared-components/Flex';
 import { useSelector } from 'react-redux';
+import { ADMIN_LOGO_SRC } from 'configs/MediaConfig';
 
 const ErrorOne = () => {
 	const theme = useSelector(state => state.theme.currentTheme)
@@ -12,7 +12,7 @@ const ErrorOne = () => {
 		<div className={`h-100 ${theme === 'light' ? 'bg-white' : ''}`}>
 			<div className="container-fluid d-flex flex-column justify-content-between h-100 px-md-4 pb-md-4 pt-md-1">
 				<div>
-					<img className="img-fluid" src={`/img/${theme === 'light' ? 'logo.png': 'logo-white.png'}`} alt="" />
+					<img className="img-fluid" src="/img/LetsDiveIn03.png" alt="SWIM MALL logo" style={{ maxWidth: 160 }} />
 				</div>
 				<div className="container">
 					<Row align="middle">
@@ -24,17 +24,12 @@ const ErrorOne = () => {
 							</Link>
 						</Col>
 						<Col xs={24} sm={24} md={{ span: 14, offset: 2 }}>
-							<img className="img-fluid mt-md-0 mt-4" src="/img/others/img-20.png" alt="" />
+							<img className="img-fluid mt-md-0 mt-4" src={ADMIN_LOGO_SRC} alt="" style={{ maxWidth: 280, opacity: 0.85 }} />
 						</Col>
 					</Row>
 				</div>
-				<Flex mobileFlex={false} justifyContent="space-between">
-					<span>Copyright  &copy;  {`${new Date().getFullYear()}`} <span className="font-weight-semibold">{`${APP_NAME}`}</span></span>
-					<div>
-						<a className="text-gray" href="/#" onClick={e => e.preventDefault()}>Term & Conditions</a>
-						<span className="mx-2 text-muted"> | </span>
-						<a className="text-gray" href="/#" onClick={e => e.preventDefault()}>Privacy & Policy</a>
-					</div>
+				<Flex mobileFlex={false} justifyContent="center">
+					<span>Copyright &copy; {`${new Date().getFullYear()}`} <span className="font-weight-semibold">Let's Dive In</span> All rights reserved.</span>
 				</Flex>
 			</div>
 		</div>

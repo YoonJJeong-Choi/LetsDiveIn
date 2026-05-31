@@ -613,8 +613,8 @@ public class SalePolicyService {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "SALE 이벤트 할인 기준이 설정되지 않아 세일을 생성할 수 없습니다.");
         }
 
-        if (event.getEventStatus() != EventStatus.ACTIVE && event.getEventStatus() != EventStatus.SCHEDULED) {
-            throw new BusinessException(ErrorCode.INVALID_REQUEST, "진행 예정/진행 중 이벤트에만 세일을 연결할 수 있습니다.");
+        if (event.getEventStatus() != EventStatus.PUBLISHED) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "공개 상태 이벤트에만 세일을 연결할 수 있습니다.");
         }
 
         // 강제형 SALE 연동은 요청 startAt/endAt을 사용하지 않고 이벤트 기간으로 고정합니다.

@@ -31,6 +31,8 @@ public enum ErrorCode {
     EVENT_NOT_FOUND(404, "이벤트를 찾을 수 없습니다"),
     GRADE_NOT_FOUND(404, "등급을 찾을 수 없습니다"),
     FAQ_NOT_FOUND(404, "FAQ를 찾을 수 없습니다"),
+    QNA_NOT_FOUND(404, "QnA를 찾을 수 없습니다"),
+    QNA_ALREADY_ANSWERED(409, "이미 답변이 완료된 QnA입니다"),
     INVALID_CREDENTIALS(401, "이메일 또는 비밀번호가 올바르지 않습니다"),
     EMAIL_NOT_VERIFIED(403, "이메일 인증이 완료되지 않았습니다"),
     ACCOUNT_INACTIVE(403, "비활성화된 계정입니다. 관리자에게 문의하세요"),
@@ -39,6 +41,9 @@ public enum ErrorCode {
     PARTNER_INACTIVE(400, "비활성화된 파트너는 해당 기능을 사용할 수 없습니다. 조회만 가능합니다"),
     INVALID_QUANTITY(400, "수량은 1 이상이어야 합니다"),
     INVALID_REQUEST(400, "잘못된 요청입니다"),
+    REVIEW_ANALYSIS_NOT_ENOUGH_REVIEWS(400, "리뷰 AI 분석은 최소 %d건 이상 필요합니다. (현재 %d건)"),
+    AI_DAILY_LIMIT_EXCEEDED(429, "오늘 AI 사용 한도에 도달했습니다"),
+    RATE_LIMIT_EXCEEDED(429, "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요."),
     OPTION_REQUIRED(400, "이 상품은 옵션 선택이 필수입니다"),
     INSUFFICIENT_POINT(400, "포인트 잔액이 부족합니다"),
     

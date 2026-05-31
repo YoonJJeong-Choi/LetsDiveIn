@@ -1,10 +1,9 @@
 "use client";
 const filterOptions = [
-  "Sort by (Default)",
-  "Title Ascending",
-  "Title Descending",
-  "Price Ascending",
-  "Price Descending",
+  "신상품순",
+  "인기순",
+  "가격 낮은순",
+  "가격 높은순",
 ];
 export default function Sorting({ allProps }) {
   return (

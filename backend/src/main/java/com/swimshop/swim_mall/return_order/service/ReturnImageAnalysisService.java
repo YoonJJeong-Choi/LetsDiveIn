@@ -15,6 +15,10 @@ public class ReturnImageAnalysisService {
         List<String> safeImages = imageUrls != null ? imageUrls.stream().filter(s -> s != null && !s.isBlank()).toList() : List.of();
         String reason = returnReason != null ? returnReason.trim() : "";
         String reasonLower = reason.toLowerCase(Locale.ROOT);
+        boolean imageRequired = reasonType == ReturnReasonType.DEFECT
+                || reasonType == ReturnReasonType.WRONG_ITEM
+                || reasonType == ReturnReasonType.OTHER;
+        boolean detailedNarrativeRequired = imageRequired;
 
         List<String> evidenceTags = new ArrayList<>();
         List<String> evidenceGaps = new ArrayList<>();
@@ -27,13 +31,13 @@ public class ReturnImageAnalysisService {
             if (safeImages.size() >= 4) {
                 evidenceTags.add("SUFFICIENT_IMAGE_VOLUME");
             }
-        } else {
+        } else if (imageRequired) {
             evidenceGaps.add("NO_IMAGE_EVIDENCE");
         }
 
         if (reason.length() >= 10) {
             evidenceTags.add("HAS_REASON_TEXT");
-        } else {
+        } else if (detailedNarrativeRequired) {
             evidenceGaps.add("REASON_TEXT_TOO_SHORT");
         }
 
@@ -47,17 +51,13 @@ public class ReturnImageAnalysisService {
             evidenceTags.add("EVIDENCE_REFERENCE_IN_TEXT");
         }
 
-        boolean imageRequired = reasonType == ReturnReasonType.DEFECT
-                || reasonType == ReturnReasonType.WRONG_ITEM
-                || reasonType == ReturnReasonType.OTHER;
-
         if (imageRequired && safeImages.isEmpty()) {
             evidenceGaps.add("REQUIRED_IMAGE_MISSING");
         } else if (imageRequired && safeImages.size() == 1) {
             evidenceGaps.add("ADDITIONAL_IMAGE_RECOMMENDED");
         }
 
-        if (evidenceTags.isEmpty()) {
+        if (evidenceTags.isEmpty() && (imageRequired || detailedNarrativeRequired)) {
             evidenceTags.add("EVIDENCE_SIGNAL_WEAK");
         }
         return new EvidenceResult(evidenceTags, evidenceGaps);

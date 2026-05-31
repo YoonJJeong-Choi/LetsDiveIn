@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo } from "react";
+import { formatKrw } from "@/lib/price/formatKrw";
 
 export default function ColorSizeSelect({ 
   options = [], 
@@ -269,7 +270,7 @@ export default function ColorSizeSelect({
             </div>
           </div>
           <div className="variant-picker-values variant-other-size">
-            {uniqueSizes.map((size) => {
+            {uniqueSizes.map((size, sizeIdx) => {
               const isSelected = selectedSize === size;
               
               // 선택된 색상과 사이즈 조합의 옵션 찾기
@@ -310,7 +311,7 @@ export default function ColorSizeSelect({
               
               return (
                 <div
-                  key={size}
+                  key={`size-${sizeIdx}-${String(size)}`}
                   className={`btn-size other-variant-btn ${
                     isSelected ? "active" : ""
                   } ${isOutOfStock ? "out-of-stock" : ""}`}
@@ -361,7 +362,7 @@ export default function ColorSizeSelect({
                         lineHeight: "16px"
                       }}
                     >
-                      +₩{optionPrice.toLocaleString()}
+                      +{formatKrw(optionPrice)}
                     </span>
                   )}
                   {showStockInfo && (

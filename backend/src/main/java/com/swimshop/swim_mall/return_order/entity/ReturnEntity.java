@@ -11,7 +11,6 @@ import lombok.NoArgsConstructor;
 
 import com.swimshop.swim_mall.order.entity.OrderItemEntity;
 import com.swimshop.swim_mall.common.enums.ReturnReasonType;
-import com.swimshop.swim_mall.common.enums.ReturnRiskTier;
 import com.swimshop.swim_mall.common.enums.ReturnStatus;
 
 @Entity
@@ -43,13 +42,6 @@ public class ReturnEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private ReturnReasonType returnReasonType;
-
-    @Column(nullable = true)
-    private Integer returnRiskScore;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = true, length = 20)
-    private ReturnRiskTier returnRiskTier;
 
     @Column(nullable = false)
     private Long returnAmount; //반품 금액

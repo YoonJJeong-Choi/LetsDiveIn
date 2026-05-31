@@ -1,5 +1,6 @@
 package com.swimshop.swim_mall.inventory.repository;
 
+import com.swimshop.swim_mall.common.enums.ActiveStatus;
 import com.swimshop.swim_mall.inventory.entity.InventoryEntity;
 import com.swimshop.swim_mall.option.entity.OptionEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -47,4 +48,29 @@ public interface InventoryRepository extends JpaRepository<InventoryEntity, Long
      * @return 재고가 존재하면 true
      */
     boolean existsByOption(OptionEntity option);
+
+    /**
+     * 파트너 소유·판매중(ACTIVE) 옵션/단일상품 재고 중, 수량이 임계 이하인 행 개수(품절·품절 임박)
+     */
+    @Query("SELECT COUNT(i) FROM InventoryEntity i "
+            + "LEFT JOIN i.option opt "
+            + "LEFT JOIN i.product prod "
+            + "WHERE i.inventoryStock <= :threshold "
+            + "AND ((opt IS NOT NULL AND opt.partner.partnerId = :partnerId AND opt.optionStatus = :activeStatus) "
+            + "OR (prod IS NOT NULL AND prod.partner.partnerId = :partnerId AND prod.productActiveStatus = :activeStatus))")
+    long countLowStockLinesForPartner(
+            @Param("partnerId") Long partnerId,
+            @Param("threshold") int threshold,
+            @Param("activeStatus") ActiveStatus activeStatus);
+
+    /** 파트너 소유·판매중(ACTIVE) 재고 중 수량 0 이하(품절) */
+    @Query("SELECT COUNT(i) FROM InventoryEntity i "
+            + "LEFT JOIN i.option opt "
+            + "LEFT JOIN i.product prod "
+            + "WHERE i.inventoryStock <= 0 "
+            + "AND ((opt IS NOT NULL AND opt.partner.partnerId = :partnerId AND opt.optionStatus = :activeStatus) "
+            + "OR (prod IS NOT NULL AND prod.partner.partnerId = :partnerId AND prod.productActiveStatus = :activeStatus))")
+    long countOutOfStockLinesForPartner(
+            @Param("partnerId") Long partnerId,
+            @Param("activeStatus") ActiveStatus activeStatus);
 }

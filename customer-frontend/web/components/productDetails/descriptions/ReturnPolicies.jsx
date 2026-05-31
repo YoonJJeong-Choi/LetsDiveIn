@@ -4,43 +4,37 @@ export default function ReturnPolicies() {
   return (
     <>
       {" "}
-      <div className="text-btn-uppercase mb_12">Return Policies</div>
+      <div className="text-btn-uppercase mb_12">반품 정책</div>
       <p className="mb_12 text-secondary">
-        At Modave, we stand behind the quality of our products. If you're not
-        completely satisfied with your purchase, we offer hassle-free returns
-        within 30 days of delivery.
+        스윔몰은 상품 품질을 최우선으로 생각합니다. 구매하신 상품에 만족하지
+        못하신 경우, 배송 완료일 기준 30일 이내 반품을 지원합니다.
       </p>
-      <div className="text-btn-uppercase mb_12">Easy Exchanges or Refunds</div>
+      <div className="text-btn-uppercase mb_12">교환/환불 안내</div>
       <ul className="list-text type-disc mb_12 gap-6">
         <li className="text-secondary font-2">
-          Exchange your item for a different size, color, or style, or receive a
-          full refund.
+          다른 사이즈, 색상, 스타일로 교환하거나 전액 환불을 받을 수 있습니다.
         </li>
         <li className="text-secondary font-2">
-          All returned items must be unworn, in their original packaging, and
-          with tags attached.
+          반품 상품은 미착용 상태여야 하며, 원포장 및 택이 유지되어야 합니다.
         </li>
       </ul>
-      <div className="text-btn-uppercase mb_12">Simple Process</div>
+      <div className="text-btn-uppercase mb_12">반품 절차</div>
       <ul className="list-text type-number">
         <li className="text-secondary font-2">
-          Initiate your return online or contact our customer service team for
-          assistance.
+          마이페이지에서 반품을 접수하거나 고객센터로 문의해 주세요.
         </li>
         <li className="text-secondary font-2">
-          Pack your item securely and include the original packing slip.
+          상품을 안전하게 포장하고 주문 정보를 함께 동봉해 주세요.
         </li>
         <li className="text-secondary font-2">
-          Ship your return back to us using our prepaid shipping label.
+          안내된 반품 방법에 따라 상품을 보내 주세요.
         </li>
         <li className="text-secondary font-2">
-          Once received, your refund will be processed promptly.
+          물류센터 입고 확인 후 환불이 순차적으로 처리됩니다.
         </li>
       </ul>
       <p className="text-secondary font-2">
-        For any questions or concerns regarding returns, don't hesitate to reach
-        out to our dedicated customer service team. Your satisfaction is our
-        priority.
+        반품 관련 문의사항은 고객센터로 연락해 주세요. 빠르게 도와드리겠습니다.
       </p>
     </>
   );

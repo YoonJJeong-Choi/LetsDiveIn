@@ -1,35 +1,35 @@
 "use client";
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { getFaqList } from "@/lib/api/faq";
+import { INQUIRY_CATEGORIES, getCategoryLabel } from "@/data/inquiryCategories";
+import InlineTemplateLoader from "@/components/common/InlineTemplateLoader";
 
 export default function Faqs() {
   const [faqs, setFaqs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // 카테고리별 FAQ 그룹화
+  const normalizeFaqCategory = (category) => {
+    if (!category) return "ETC";
+    if (category === "포인트/쿠폰" || category === "포인트") return "POINT";
+    const byCode = INQUIRY_CATEGORIES.find((c) => c.code === category);
+    if (byCode) return byCode.code;
+    const byLabel = INQUIRY_CATEGORIES.find((c) => c.label === category);
+    return byLabel ? byLabel.code : category;
+  };
+
   const groupFaqsByCategory = (faqList) => {
     const grouped = {};
     faqList.forEach((faq) => {
-      const category = faq.faqCategory || "기타";
-      if (!grouped[category]) {
-        grouped[category] = [];
-      }
-      grouped[category].push(faq);
+      const code = normalizeFaqCategory(faq.faqCategory);
+      if (!grouped[code]) grouped[code] = [];
+      grouped[code].push(faq);
     });
     return grouped;
   };
 
-  // 카테고리 표시 순서
-  const categoryOrder = [
-    "주문/결제",
-    "배송",
-    "취소/반품/교환",
-    "회원정보",
-    "상품",
-    "포인트/쿠폰",
-    "기타",
-  ];
+  const categoryOrder = INQUIRY_CATEGORIES.map((c) => c.code);
 
   useEffect(() => {
     const fetchFaqs = async () => {
@@ -53,37 +53,22 @@ export default function Faqs() {
 
   const groupedFaqs = groupFaqsByCategory(faqs);
 
-  // 카테고리 순서대로 정렬
   const sortedCategories = categoryOrder.filter(
-    (cat) => groupedFaqs[cat] && groupedFaqs[cat].length > 0
+    (code) => groupedFaqs[code] && groupedFaqs[code].length > 0
   );
 
-  // 순서에 없는 카테고리도 추가
-  Object.keys(groupedFaqs).forEach((cat) => {
-    if (!sortedCategories.includes(cat)) {
-      sortedCategories.push(cat);
+  Object.keys(groupedFaqs).forEach((code) => {
+    if (!sortedCategories.includes(code)) {
+      sortedCategories.push(code);
     }
   });
-
-  // 카테고리 한글명 매핑
-  const categoryLabels = {
-    "주문/결제": "주문/결제",
-    배송: "배송",
-    "취소/반품/교환": "취소/반품/교환",
-    회원정보: "회원정보",
-    상품: "상품",
-    "포인트/쿠폰": "포인트/쿠폰",
-    기타: "기타",
-  };
 
   if (loading) {
     return (
       <section className="flat-spacing">
         <div className="container">
-          <div className="page-faqs-wrap">
-            <div className="text-center py-5">
-              <p>FAQ를 불러오는 중...</p>
-            </div>
+          <div className="page-faqs-wrap py-5 d-flex justify-content-center">
+            <InlineTemplateLoader />
           </div>
         </div>
       </section>
@@ -114,14 +99,14 @@ export default function Faqs() {
                 <p>등록된 FAQ가 없습니다.</p>
               </div>
             ) : (
-              sortedCategories.map((category, categoryIndex) => {
-                const categoryFaqs = groupedFaqs[category];
+              sortedCategories.map((categoryCode, categoryIndex) => {
+                const categoryFaqs = groupedFaqs[categoryCode];
                 const accordionId = `accordion-faq-${categoryIndex + 1}`;
 
                 return (
-                  <div key={category}>
+                  <div key={categoryCode}>
                     <h5 className="faqs-title">
-                      {categoryLabels[category] || category}
+                      {getCategoryLabel(categoryCode)}
                     </h5>
                     <ul
                       className="accordion-product-wrap style-faqs"
@@ -149,9 +134,7 @@ export default function Faqs() {
                               data-bs-parent={`#${accordionId}`}
                             >
                               <div className="accordion-faqs-content">
-                                <p className="text-secondary">
-                                  {faq.faqAnswer}
-                                </p>
+                                <p className="text-secondary">{faq.faqAnswer}</p>
                               </div>
                             </div>
                           </li>
@@ -165,61 +148,13 @@ export default function Faqs() {
           </div>
           <div className="ask-question sticky-top">
             <div className="ask-question-wrap">
-              <h5 className="mb_4">문의하기</h5>
+              <h5 className="mb_4">1:1 QnA</h5>
               <p className="mb_20 text-secondary">
-                궁금한 점이 있으시면 문의해주세요
+                FAQ에서 답을 찾지 못하셨다면 1:1 QnA를 남겨 주세요.
               </p>
-              <form
-                className="form-leave-comment"
-                onSubmit={(e) => e.preventDefault()}
-              >
-                <fieldset className="mb_20">
-                  <div className="text-caption-1 mb_8">이름</div>
-                  <input
-                    className=""
-                    type="text"
-                    placeholder="이름을 입력하세요*"
-                    name="name"
-                    tabIndex={2}
-                    defaultValue=""
-                    aria-required="true"
-                    required
-                  />
-                </fieldset>
-                <fieldset className="mb_20">
-                  <div className="text-caption-1 mb_8">
-                    문의 유형을 선택하세요
-                  </div>
-                  <div className="tf-select">
-                    <select className="">
-                      <option>주문/결제</option>
-                      <option>배송</option>
-                      <option>취소/반품/교환</option>
-                      <option>회원정보</option>
-                      <option>상품</option>
-                      <option>포인트/쿠폰</option>
-                      <option>기타</option>
-                    </select>
-                  </div>
-                </fieldset>
-                <fieldset className="mb_20">
-                  <div className="text-caption-1 mb_8">문의 내용</div>
-                  <textarea
-                    className=""
-                    rows={4}
-                    placeholder="문의 내용을 입력하세요*"
-                    tabIndex={2}
-                    aria-required="true"
-                    required
-                    defaultValue={""}
-                  />
-                </fieldset>
-                <div className="button-submit">
-                  <button className="btn-style-2 w-100" type="submit">
-                    <span className="text text-button">문의하기</span>
-                  </button>
-                </div>
-              </form>
+              <Link href="/qna" className="btn-style-2 w-100 text-center d-inline-block">
+                <span className="text text-button">QnA 등록·내역 보기</span>
+              </Link>
             </div>
           </div>
         </div>

@@ -6,14 +6,18 @@ export const SHOP_LIST_PATH = "/shop-default-grid";
 
 export const SHOP_PRODUCT_TYPES = PRODUCT_TYPES;
 
-export function shopHref(productType) {
-  if (!productType) return SHOP_LIST_PATH;
-  const q = new URLSearchParams({ productType });
-  return `${SHOP_LIST_PATH}?${q.toString()}`;
+/** @param {string} [productType] @param {string} [productSubType] */
+export function shopHref(productType, productSubType) {
+  if (!productType && !productSubType) return SHOP_LIST_PATH;
+  const q = new URLSearchParams();
+  if (productType) q.set("productType", productType);
+  if (productSubType) q.set("productSubType", productSubType);
+  const s = q.toString();
+  return s ? `${SHOP_LIST_PATH}?${s}` : SHOP_LIST_PATH;
 }
 
-/** 고객센터 드롭다운 — 문의(/contact)는 기능 준비 후 아래 한 줄 추가 */
+/** 고객센터 드롭다운 */
 export const CUSTOMER_SERVICE_LINKS = [
   { href: "/FAQs", label: "자주 묻는 질문" },
-  // { href: "/contact", label: "문의하기" },
+  { href: "/qna", label: "1:1 QnA" },
 ];

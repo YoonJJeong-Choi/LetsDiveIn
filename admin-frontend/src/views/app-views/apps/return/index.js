@@ -1,73 +1,97 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Table, Button, Modal, Input, Form, message, Tag, Space, Row, Col, Select, Descriptions, Statistic, Tabs, Spin, Image, Tooltip } from 'antd';
-import { UndoOutlined, CheckCircleOutlined, DollarOutlined, EyeOutlined, BellOutlined, CarOutlined, HistoryOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { useSearchParams } from 'react-router-dom';
+import { Card, Table, Button, Modal, Input, Form, message, Tag, Space, Row, Col, Select, Descriptions, Statistic, Tabs, Spin, Image } from 'antd';
+import { UndoOutlined, CheckCircleOutlined, DollarOutlined, EyeOutlined, BellOutlined, CarOutlined, HistoryOutlined } from '@ant-design/icons';
+import { useSelector } from 'react-redux';
 import ReturnService from 'services/ReturnService';
 
 const { Option } = Select;
 const { TextArea } = Input;
 
-const getAiRiskColor = (level) => {
-	switch (level) {
+const getReviewPriorityColor = (code) => {
+	switch (code) {
 		case 'HIGH':
 			return 'red';
 		case 'MEDIUM':
 			return 'orange';
 		case 'LOW':
-			return 'green';
+			return 'blue';
 		default:
 			return 'default';
 	}
 };
 
-/** AI 보조: 위험 등급 코드 → 한글 (짧은 표기) */
-const getAiRiskLevelLabelShort = (level) => {
-	switch (level) {
-		case 'LOW':
-			return '낮음';
-		case 'MEDIUM':
-			return '보통';
-		case 'HIGH':
-			return '높음';
+const getEvidenceStatusColor = (code) => {
+	switch (code) {
+		case 'NOT_REQUIRED':
+			return 'blue';
+		case 'SUFFICIENT':
+			return 'green';
+		case 'PARTIAL':
+			return 'gold';
+		case 'NEEDS_MORE_EVIDENCE':
+			return 'red';
 		default:
-			return level || '알 수 없음';
+			return 'default';
 	}
 };
 
-const AI_RISK_FACTOR_KO = {
-	TARGET_RETURN_MISSING: '대상 반품 정보 없음',
-	RECENT_RETURN_FREQUENCY_HIGH: '최근 90일 반품 빈도 높음',
-	RECENT_RETURN_FREQUENCY: '최근 90일 반품 이력 있음',
-	SAME_ADDRESS_REPEAT_HIGH: '동일 배송지 반복(다수)',
-	SAME_ADDRESS_REPEAT: '동일 배송지 반복',
-	REJECTED_HISTORY_HIGH: '과거 반려 이력 다수',
-	REJECTED_HISTORY: '과거 반려 이력',
-	DISPUTE_LIKE_HISTORY: '분쟁·이의 관련 문구가 있는 반려 이력',
-	HIGH_RETURN_AMOUNT: '고액 반품(10만원 이상)',
-	NO_STRONG_FRAUD_SIGNAL: '특이 위험 신호 없음',
-	AI_FEATURE_DISABLED: 'AI 기능 비활성',
-};
+const AssistListSection = ({ title, items, emptyText = '해당 내용이 없습니다.', accent = '#d9d9d9' }) => (
+	<div style={{ padding: 12, border: '1px solid #f0f0f0', borderRadius: 8 }}>
+		<div style={{ fontWeight: 600, marginBottom: 8 }}>{title}</div>
+		{Array.isArray(items) && items.length > 0 ? (
+			<div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+				{items.map((item, idx) => (
+					<div
+						key={`${title}-${idx}-${item}`}
+						style={{
+							display: 'flex',
+							alignItems: 'flex-start',
+							gap: 8,
+							padding: '8px 10px',
+							borderRadius: 8,
+							background: '#fafafa'
+						}}
+					>
+						<div
+							style={{
+								minWidth: 22,
+								height: 22,
+								borderRadius: 11,
+								background: accent,
+								color: '#fff',
+								fontSize: 12,
+								fontWeight: 600,
+								display: 'flex',
+								alignItems: 'center',
+								justifyContent: 'center',
+								lineHeight: 1
+							}}
+						>
+							{idx + 1}
+						</div>
+						<div style={{ flex: 1, lineHeight: 1.6 }}>{item}</div>
+					</div>
+				))}
+			</div>
+		) : (
+			<div style={{ color: '#8c8c8c' }}>{emptyText}</div>
+		)}
+	</div>
+);
 
-const AI_EVIDENCE_TAG_KO = {
-	IMAGE_ATTACHED: '증빙 이미지 첨부됨',
-	MULTI_ANGLE_IMAGE: '다각도 이미지(2장 이상)',
-	SUFFICIENT_IMAGE_VOLUME: '이미지 수량 충분(4장 이상)',
-	HAS_REASON_TEXT: '상세 사유 텍스트 있음',
-	DAMAGE_CLAIM_MENTIONED: '파손·하자 언급',
-	WRONG_ITEM_CLAIM_MENTIONED: '오배송·옵션 불일치 언급',
-	EVIDENCE_REFERENCE_IN_TEXT: '사진·증빙 언급',
-	EVIDENCE_SIGNAL_WEAK: '증빙 신호 약함',
-};
-
-const AI_EVIDENCE_GAP_KO = {
-	NO_IMAGE_EVIDENCE: '증빙 이미지 없음',
-	REASON_TEXT_TOO_SHORT: '상세 사유 짧음',
-	REQUIRED_IMAGE_MISSING: '필수 증빙 이미지 없음',
-	ADDITIONAL_IMAGE_RECOMMENDED: '추가 이미지 권장',
-};
-
-const translateAiCode = (code, map) => {
-	if (!code) return '-';
-	return map[code] || code;
+const AssistReferenceGroup = ({ title, items }) => {
+	if (!Array.isArray(items) || items.length === 0) return null;
+	return (
+		<div style={{ marginTop: 12 }}>
+			<div style={{ fontWeight: 600, marginBottom: 6 }}>{title}</div>
+			<ul style={{ margin: 0, paddingLeft: 18 }}>
+				{items.map((item, idx) => (
+					<li key={`${title}-${idx}-${item}`}>{item}</li>
+				))}
+			</ul>
+		</div>
+	);
 };
 
 const getReturnStatusColor = (status) => {
@@ -104,19 +128,6 @@ const getReturnReasonTypeLabel = (t) => {
 	}
 };
 
-const getReturnRiskTierLabel = (tier) => {
-	switch (tier) {
-		case 'LOW':
-			return '낮음';
-		case 'MEDIUM':
-			return '보통';
-		case 'HIGH':
-			return '높음';
-		default:
-			return tier || '-';
-	}
-};
-
 const getReturnStatusLabel = (status) => {
 	switch (status) {
 		case 'REQUESTED':
@@ -136,7 +147,13 @@ const getReturnStatusLabel = (status) => {
 
 const { TabPane } = Tabs;
 
+/** 대시보드 반품 큐와 동일: 신청·승인·수거 완료(환불 전) */
+const PROCESSING_QUEUE = 'PROCESSING_QUEUE';
+
 const ReturnManagement = () => {
+	const [searchParams, setSearchParams] = useSearchParams();
+	const role = useSelector((state) => state.auth.user?.role);
+	const isAdmin = role === 'ADMIN';
 	const [returns, setReturns] = useState([]);
 	const [loading, setLoading] = useState(false);
 	const [detailModalVisible, setDetailModalVisible] = useState(false);
@@ -148,12 +165,83 @@ const ReturnManagement = () => {
 	const [returnHistoryTab, setReturnHistoryTab] = useState('detail');
 	const [returnHistory, setReturnHistory] = useState([]);
 	const [returnHistoryLoading, setReturnHistoryLoading] = useState(false);
-	const [aiAssist, setAiAssist] = useState(null);
-	const [aiAssistLoading, setAiAssistLoading] = useState(false);
+	const [returnAssist, setReturnAssist] = useState(null);
+	const [returnAssistLoading, setReturnAssistLoading] = useState(false);
 
 	useEffect(() => {
 		fetchAllReturns();
 	}, []);
+
+	useEffect(() => {
+		const f = searchParams.get('filter');
+		if (f === 'processing') {
+			setStatusFilter(PROCESSING_QUEUE);
+			return;
+		}
+		if (f === 'REQUESTED' || f === 'REJECTED' || f === 'REFUNDED') {
+			setStatusFilter(f);
+		}
+	}, [searchParams]);
+
+	/** 대시보드 등에서 `?returnNo=` 로 진입 시 상세 모달 자동 오픈 */
+	useEffect(() => {
+		const raw = searchParams.get('returnNo');
+		if (!raw) {
+			return undefined;
+		}
+		const no = Number(raw);
+		if (!Number.isFinite(no) || no <= 0) {
+			return undefined;
+		}
+		let cancelled = false;
+		(async () => {
+			try {
+				const response = await ReturnService.getReturn(no);
+				const returnData = response.data || response;
+				if (cancelled) {
+					return;
+				}
+				setSelectedReturn(returnData);
+				setDetailModalVisible(true);
+				setReturnHistoryTab('detail');
+				setReturnHistory([]);
+				setReturnAssist(null);
+				if (isAdmin) {
+					try {
+						setReturnAssistLoading(true);
+						const assistRes = await ReturnService.getReturnAssist(no);
+						const assistData = assistRes.data || assistRes;
+						if (!cancelled) {
+							setReturnAssist(assistData || null);
+						}
+					} catch {
+						if (!cancelled) {
+							setReturnAssist(null);
+						}
+					} finally {
+						if (!cancelled) {
+							setReturnAssistLoading(false);
+						}
+					}
+				}
+			} catch (err) {
+				if (!cancelled) {
+					message.error(err.response?.data?.message || '반품 상세 정보를 불러오는데 실패했습니다.');
+				}
+			}
+		})();
+		setSearchParams(
+			(prev) => {
+				const n = new URLSearchParams(prev);
+				n.delete('returnNo');
+				return n;
+			},
+			{ replace: true }
+		);
+		return () => {
+			cancelled = true;
+		};
+	}, [isAdmin, searchParams, setSearchParams]);
 
 	const fetchAllReturns = async () => {
 		try {
@@ -178,23 +266,30 @@ const ReturnManagement = () => {
 			setDetailModalVisible(true);
 			setReturnHistoryTab('detail');
 			setReturnHistory([]);
-			setAiAssist(null);
-			fetchReturnAiAssist(returnNo);
+			setReturnAssist(null);
+			if (isAdmin) {
+				fetchReturnAssist(returnNo);
+			}
 		} catch (err) {
 			message.error(err.response?.data?.message || '반품 상세 정보를 불러오는데 실패했습니다.');
 		}
 	};
 
-	const fetchReturnAiAssist = async (returnNo) => {
+	const fetchReturnAssist = async (returnNo) => {
+		if (!isAdmin) {
+			setReturnAssist(null);
+			setReturnAssistLoading(false);
+			return;
+		}
 		try {
-			setAiAssistLoading(true);
-			const response = await ReturnService.getReturnAiAssist(returnNo);
-			const aiData = response.data || response;
-			setAiAssist(aiData || null);
+			setReturnAssistLoading(true);
+			const response = await ReturnService.getReturnAssist(returnNo);
+			const assistData = response.data || response;
+			setReturnAssist(assistData || null);
 		} catch (err) {
-			setAiAssist(null);
+			setReturnAssist(null);
 		} finally {
-			setAiAssistLoading(false);
+			setReturnAssistLoading(false);
 		}
 	};
 	
@@ -337,6 +432,11 @@ const ReturnManagement = () => {
 	const getFilteredReturns = () => {
 		if (statusFilter === 'ALL') {
 			return returns;
+		}
+		if (statusFilter === PROCESSING_QUEUE) {
+			return returns.filter((r) =>
+				['REQUESTED', 'APPROVED', 'PICKUP_COMPLETED'].includes(r.returnStatus)
+			);
 		}
 		return returns.filter((returnItem) => returnItem.returnStatus === statusFilter);
 	};
@@ -517,7 +617,10 @@ const ReturnManagement = () => {
 							<Button
 								type="primary"
 								ghost
-								onClick={() => setStatusFilter('REQUESTED')}
+								onClick={() => {
+									setStatusFilter('REQUESTED');
+									setSearchParams({ filter: 'REQUESTED' }, { replace: true });
+								}}
 								style={{ borderColor: 'white', color: 'white' }}
 							>
 								반품 신청 보기
@@ -575,10 +678,20 @@ const ReturnManagement = () => {
 					<h4 style={{ margin: 0 }}>반품 목록</h4>
 					<Select
 						value={statusFilter}
-						onChange={setStatusFilter}
-						style={{ width: 150 }}
+						onChange={(v) => {
+							setStatusFilter(v);
+							if (v === 'ALL') {
+								setSearchParams({}, { replace: true });
+							} else if (v === PROCESSING_QUEUE) {
+								setSearchParams({ filter: 'processing' }, { replace: true });
+							} else {
+								setSearchParams({ filter: v }, { replace: true });
+							}
+						}}
+						style={{ width: 220 }}
 					>
 						<Option value="ALL">전체</Option>
+						<Option value={PROCESSING_QUEUE}>진행 중인 반품 (신청·승인·수거)</Option>
 						<Option value="REQUESTED">반품 신청</Option>
 						<Option value="REJECTED">반품 거절</Option>
 						<Option value="REFUNDED">환불 완료</Option>
@@ -610,13 +723,13 @@ const ReturnManagement = () => {
 				onCancel={() => {
 					setDetailModalVisible(false);
 					setSelectedReturn(null);
-					setAiAssist(null);
+					setReturnAssist(null);
 				}}
 				footer={[
 					<Button key="close" onClick={() => {
 						setDetailModalVisible(false);
 						setSelectedReturn(null);
-						setAiAssist(null);
+						setReturnAssist(null);
 					}}>
 						닫기
 					</Button>,
@@ -711,21 +824,6 @@ const ReturnManagement = () => {
 								<Descriptions.Item label="반품 사유 유형">
 									{getReturnReasonTypeLabel(selectedReturn.returnReasonType)}
 								</Descriptions.Item>
-								<Descriptions.Item label={(
-									<Space size={4}>
-										<span>신청 시점 위험도</span>
-										<Tooltip title="반품 신청 당시 위험도입니다. 현재 사기 위험등급과 다를 수 있습니다.">
-											<InfoCircleOutlined style={{ color: '#8c8c8c' }} />
-										</Tooltip>
-									</Space>
-								)}>
-									{selectedReturn.returnRiskTier != null ? (
-										<span style={{ fontSize: 12, color: '#666' }}>
-											{getReturnRiskTierLabel(selectedReturn.returnRiskTier)}
-											{selectedReturn.returnRiskScore != null ? ` (점수: ${selectedReturn.returnRiskScore})` : ''}
-										</span>
-									) : '-'}
-								</Descriptions.Item>
 								<Descriptions.Item label="반품 사유(상세)" span={2}>
 									{selectedReturn.returnReason || '-'}
 								</Descriptions.Item>
@@ -756,74 +854,47 @@ const ReturnManagement = () => {
 									<Descriptions.Item label="반품 택배사">{selectedReturn.returnCourier}</Descriptions.Item>
 								)}
 							</Descriptions>
-							<Card size="small" title="AI 보조 분석 (관리자 참고용)">
-								<Spin spinning={aiAssistLoading}>
-									{!aiAssist ? (
-										<div style={{ color: '#666' }}>
-											AI 보조 결과가 없습니다. 기존 관리자 검토 절차를 진행하세요.
-										</div>
-									) : aiAssist.featureEnabled === false ? (
-										<div style={{ color: '#666' }}>
-											AI 기능이 비활성화되어 기존 관리자 검토 절차를 진행하세요.
-										</div>
-									) : (
-										<Descriptions bordered size="small" column={1}>
-											<Descriptions.Item label="위험 등급(현재 평가)">
-												<Space wrap>
-													<Tag color={getAiRiskColor(aiAssist.riskLevel)}>
-														{getAiRiskLevelLabelShort(aiAssist.riskLevel)}
-													</Tag>
-													<span>점수: {aiAssist.fraudScore ?? 0}</span>
-												</Space>
-											</Descriptions.Item>
-											<Descriptions.Item label="리스크 요인">
-												{Array.isArray(aiAssist.riskFactors) && aiAssist.riskFactors.length > 0 ? (
-													<Space wrap size={[8, 8]}>
-														{aiAssist.riskFactors.map((f) => (
-															<Tag key={f}>{translateAiCode(f, AI_RISK_FACTOR_KO)}</Tag>
-														))}
+							{isAdmin && (
+								<Card size="small" title="반품 검토 보조 (관리자 전용)">
+									<Spin spinning={returnAssistLoading}>
+										{!returnAssist ? (
+											<div style={{ color: '#666' }}>
+												검토 보조 결과가 없습니다. 주문·배송·반품 이력을 기본 절차대로 확인하세요.
+											</div>
+										) : (
+											(() => {
+												const hasReferenceInfo =
+													(Array.isArray(returnAssist.signals?.customerSignals) && returnAssist.signals.customerSignals.length > 0);
+												return (
+													<Space direction="vertical" size={12} style={{ width: '100%' }}>
+														<div style={{ padding: 12, borderRadius: 8, background: '#fafafa', border: '1px solid #f0f0f0' }}>
+															<div style={{ fontWeight: 600, marginBottom: 8 }}>검토 요약</div>
+															<Space wrap size={[8, 8]} style={{ marginBottom: 8 }}>
+																<Tag color={getReviewPriorityColor(returnAssist.reviewPriority?.code)}>
+																	검토 우선도: {returnAssist.reviewPriority?.label || '-'}
+																</Tag>
+																<Tag color={getEvidenceStatusColor(returnAssist.evidenceStatus?.code)}>
+																	증빙 상태: {returnAssist.evidenceStatus?.label || '-'}
+																</Tag>
+															</Space>
+															<div style={{ whiteSpace: 'pre-wrap', color: '#262626' }}>
+																{returnAssist.summary || '-'}
+															</div>
+														</div>
+														<AssistListSection title="확인 포인트" items={returnAssist.checkPoints} accent="#1677ff" />
+														{hasReferenceInfo && (
+															<details style={{ padding: 12, border: '1px solid #f0f0f0', borderRadius: 8, background: '#fff' }}>
+																<summary style={{ cursor: 'pointer', fontWeight: 600 }}>참고 정보 보기</summary>
+																<AssistReferenceGroup title="고객 이력 참고" items={returnAssist.signals?.customerSignals} />
+															</details>
+														)}
 													</Space>
-												) : (
-													'-'
-												)}
-											</Descriptions.Item>
-											<Descriptions.Item label="증빙 태그">
-												{Array.isArray(aiAssist.evidenceTags) && aiAssist.evidenceTags.length > 0 ? (
-													<Space wrap size={[8, 8]}>
-														{aiAssist.evidenceTags.map((f) => (
-															<Tag key={f} color="blue">{translateAiCode(f, AI_EVIDENCE_TAG_KO)}</Tag>
-														))}
-													</Space>
-												) : (
-													'-'
-												)}
-											</Descriptions.Item>
-											<Descriptions.Item label="증빙 누락">
-												{Array.isArray(aiAssist.evidenceGaps) && aiAssist.evidenceGaps.length > 0 ? (
-													<Space wrap size={[8, 8]}>
-														{aiAssist.evidenceGaps.map((f) => (
-															<Tag key={f} color="red">{translateAiCode(f, AI_EVIDENCE_GAP_KO)}</Tag>
-														))}
-													</Space>
-												) : (
-													'-'
-												)}
-											</Descriptions.Item>
-											<Descriptions.Item label="권장 조치">
-												{Array.isArray(aiAssist.recommendedActions) && aiAssist.recommendedActions.length > 0 ? (
-													<ul style={{ margin: 0, paddingLeft: 18 }}>
-														{aiAssist.recommendedActions.map((item, idx) => (
-															<li key={`${idx}-${item}`}>{item}</li>
-														))}
-													</ul>
-												) : (
-													'-'
-												)}
-											</Descriptions.Item>
-										</Descriptions>
-									)}
-								</Spin>
-							</Card>
+												);
+											})()
+										)}
+									</Spin>
+								</Card>
+							)}
 						</TabPane>
 						<TabPane tab={<span><HistoryOutlined /> 변경 이력</span>} key="history">
 							<Spin spinning={returnHistoryLoading}>

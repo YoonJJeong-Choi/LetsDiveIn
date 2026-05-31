@@ -30,7 +30,7 @@ public class PartnerEventController {
     /**
      * 파트너 노출 이벤트 목록 조회
      * - eventMode = PARTNER_PARTICIPATION
-     * - eventStatus IN (SCHEDULED, ACTIVE)
+     * - eventStatus IN (PUBLISHED, ENDED)
      * - optional: upcomingDays
      * GET /api/partner/events
      */

@@ -22,7 +22,7 @@ public class EventStatusScheduler {
     private final EventRepository eventRepository;
 
     /**
-     * 고객 이벤트 종료시점이 지난 ACTIVE 이벤트를 ENDED로 자동 전환합니다.
+     * 고객 이벤트 종료시점이 지난 공개(PUBLISHED) 이벤트를 ENDED로 자동 전환합니다.
      * - 수동 상태 변경은 계속 가능
      * - 자동 전환은 운영 편의성 보완용
      */
@@ -31,7 +31,7 @@ public class EventStatusScheduler {
     public void autoEndExpiredActiveEvents() {
         LocalDateTime now = LocalDateTime.now();
         List<EventEntity> targets = eventRepository.findByEventStatusAndCustomerEventEndAtBefore(
-                EventStatus.ACTIVE,
+                EventStatus.PUBLISHED,
                 now
         );
 

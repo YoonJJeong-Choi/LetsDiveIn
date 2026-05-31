@@ -43,8 +43,11 @@ const AppContent = styled('div')`
 export const AppLayout = ({ navCollapsed, navType, direction, children }) => {
 
     const location = useLocation();
+    const currentPath = `${location.pathname}${location.search}`;
 
-    const currentRouteInfo = utils.getRouteInfo(navigationConfig, location.pathname)
+    const currentRouteInfo =
+        utils.getRouteInfo(navigationConfig, currentPath) ||
+        utils.getRouteInfo(navigationConfig, location.pathname)
     const screens = utils.getBreakPoint(useBreakpoint());
     const isMobile = screens.length === 0 ? false : !screens.includes('lg')
     const isNavSide = navType === TEMPLATE.NAV_TYPE_SIDE

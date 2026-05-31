@@ -22,8 +22,8 @@ public class SignedFileUrlService {
 
     public SignedFileUrlService(
             @Value("${app.public-base-url:${app.base-url:http://localhost:8080}}") String publicBaseUrl,
-            @Value("${ai.image-url.signing-secret:}") String signingSecret,
-            @Value("${ai.image-url.ttl-seconds:600}") long ttlSeconds) {
+            @Value("${app.file.signed-url.signing-secret:}") String signingSecret,
+            @Value("${app.file.signed-url.ttl-seconds:600}") long ttlSeconds) {
         this.publicBaseUrl = trimSlash(publicBaseUrl);
         this.signingSecret = signingSecret;
         this.ttlSeconds = ttlSeconds;
@@ -34,10 +34,10 @@ public class SignedFileUrlService {
             throw new IllegalArgumentException("fileId is required");
         }
         if (signingSecret == null || signingSecret.isBlank()) {
-            throw new IllegalStateException("AI image signing secret is missing");
+            throw new IllegalStateException("File signed URL signing secret is missing (app.file.signed-url.signing-secret)");
         }
         if (ttlSeconds <= 0) {
-            throw new IllegalStateException("AI image url ttl seconds must be positive");
+            throw new IllegalStateException("File signed URL ttl seconds must be positive");
         }
         long exp = Instant.now().getEpochSecond() + ttlSeconds;
         String sig = createSignature(fileId, exp);

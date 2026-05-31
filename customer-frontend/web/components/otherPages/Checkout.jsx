@@ -5,33 +5,17 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Swiper, SwiperSlide } from "swiper/react";
 import { createOrder, startPriceLock } from "@/lib/api/order";
 import { getCart, addCartItem } from "@/lib/api/cart";
 import { createPayment } from "@/lib/api/payment";
-import { getMe } from "@/lib/api/auth";
-import { getAddresses } from "@/lib/api/customer";
+import { getMe, isPortalAccessError } from "@/lib/api/auth";
+import { getAddresses, addAddress } from "@/lib/api/customer";
 import { getPointBalance } from "@/lib/api/point";
 import { getApplicableSale } from "@/lib/api/sale";
-const discounts = [
-  {
-    discount: "10% OFF",
-    details: "For all orders from 200$",
-    code: "Mo234231",
-  },
-  {
-    discount: "10% OFF",
-    details: "For all orders from 200$",
-    code: "Mo234231",
-  },
-  {
-    discount: "10% OFF",
-    details: "For all orders from 200$",
-    code: "Mo234231",
-  },
-];
+import { useBlockQuickCartModal } from "@/hooks/useBlockQuickCartModal";
+import { formatKrw } from "@/lib/price/formatKrw";
 export default function Checkout() {
-  const [activeDiscountIndex, setActiveDiscountIndex] = useState(1);
+  useBlockQuickCartModal();
   const { cartProducts, setCartProducts, totalPrice, isLoggedIn } = useContextElement();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -42,26 +26,28 @@ export default function Checkout() {
   const [localIsLoggedIn, setLocalIsLoggedIn] = useState(false);
   const [isCheckingLogin, setIsCheckingLogin] = useState(true);
   const [isSyncingCart, setIsSyncingCart] = useState(false);
+  const [isReloadingMyInfo, setIsReloadingMyInfo] = useState(false);
+  const [saveNewAddress, setSaveNewAddress] = useState(false);
+  const [isAddressScriptReady, setIsAddressScriptReady] = useState(false);
+  const [isAddressVerifiedByPostcode, setIsAddressVerifiedByPostcode] = useState(false);
+  const deliveryAddressDetailInputRef = useRef(null);
   const paymentWidgetRef = useRef(null);
   const paymentMethodsRef = useRef(null);
   const paymentWidgetReadyRef = useRef(false);
+  /** 금액은 매 렌더마다 갱신 — 위젯 비동기 초기화 완료 시점의 최신 금액용 */
+  const latestPayAmountRef = useRef(0);
   
   // 페이지 로드 시 로그인 상태 확인 및 사용자 정보 로드
   useEffect(() => {
     const checkLogin = async () => {
       try {
-        const user = await getMe();
+        const user = await getMe({ throwOnForbidden: true });
         const loggedIn = !!user;
         setLocalIsLoggedIn(loggedIn);
         
-        // 비로그인 상태면 로그인 페이지로 리다이렉트
+        // 비로그인 상태면 로그인 페이지로 리다이렉트 (추가 confirm 없이 단일 처리)
         if (!loggedIn) {
-          const confirmMessage = "주문을 진행하려면 로그인이 필요합니다.\n\n로그인 페이지로 이동하시겠습니까?";
-          if (confirm(confirmMessage)) {
-            router.push("/login");
-          } else {
-            router.push("/shop-cart");
-          }
+          router.replace("/login?next=/checkout");
           return;
         }
         
@@ -70,7 +56,22 @@ export default function Checkout() {
           const userData = user.data || user;
           setFormData(prev => ({
             ...prev,
-            email: userData.email || userData.customerEmail || "",
+            ...{
+              email: userData.email || userData.customerEmail || "",
+              recipientName:
+                prev.recipientName ||
+                userData.name ||
+                userData.customerName ||
+                userData.recipientName ||
+                "",
+              phone:
+                prev.phone ||
+                userData.phone ||
+                userData.customerPhone ||
+                userData.phoneNumber ||
+                userData.mobile ||
+                "",
+            },
           }));
           
           // 비로그인 상태에서 장바구니에 담은 아이템(cartItemNo가 없는 아이템)을 백엔드에 동기화
@@ -163,12 +164,10 @@ export default function Checkout() {
         }
       } catch (error) {
         setLocalIsLoggedIn(false);
-        // 에러 발생 시에도 로그인 페이지로 리다이렉트
-        const confirmMessage = "주문을 진행하려면 로그인이 필요합니다.\n\n로그인 페이지로 이동하시겠습니까?";
-        if (confirm(confirmMessage)) {
-          router.push("/login");
+        if (isPortalAccessError(error)) {
+          router.replace("/login?reason=portal&next=/checkout");
         } else {
-          router.push("/shop-cart");
+          router.replace("/login?next=/checkout");
         }
       } finally {
         setIsCheckingLogin(false);
@@ -199,9 +198,94 @@ export default function Checkout() {
     usePointAmount: 0, // 포인트 사용 금액
   });
 
+  const applyMyInfoToForm = (userData) => {
+    setFormData((prev) => ({
+      ...prev,
+      email: userData?.email || userData?.customerEmail || prev.email || "",
+      recipientName:
+        userData?.name ||
+        userData?.customerName ||
+        userData?.recipientName ||
+        prev.recipientName ||
+        "",
+      phone:
+        userData?.phone ||
+        userData?.customerPhone ||
+        userData?.phoneNumber ||
+        userData?.mobile ||
+        prev.phone ||
+        "",
+    }));
+  };
+
+  const handleReloadMyInfo = async () => {
+    if (!actuallyLoggedIn || isReloadingMyInfo) return;
+    setIsReloadingMyInfo(true);
+    try {
+      const latestUser = await getMe();
+      const latestUserData = latestUser?.data || latestUser;
+      if (!latestUserData) {
+        alert("회원 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
+        return;
+      }
+      applyMyInfoToForm(latestUserData);
+    } catch (error) {
+      alert("회원 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setIsReloadingMyInfo(false);
+    }
+  };
+
   // 포인트 잔액
   const [pointBalance, setPointBalance] = useState(0);
   const [pointLoading, setPointLoading] = useState(false);
+
+  // 다음(카카오) 주소 검색 스크립트 로드
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window?.daum?.Postcode) {
+      setIsAddressScriptReady(true);
+      return;
+    }
+
+    const existingScript = document.querySelector('script[data-daum-postcode="true"]');
+    if (existingScript) {
+      existingScript.addEventListener("load", () => setIsAddressScriptReady(true));
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js";
+    script.async = true;
+    script.dataset.daumPostcode = "true";
+    script.onload = () => setIsAddressScriptReady(true);
+    script.onerror = () => setIsAddressScriptReady(false);
+    document.head.appendChild(script);
+  }, []);
+
+  const handleSearchAddress = () => {
+    if (!window?.daum?.Postcode) {
+      alert("주소 검색 서비스를 불러오는 중입니다. 잠시 후 다시 시도해주세요.");
+      return;
+    }
+
+    new window.daum.Postcode({
+      oncomplete: (data) => {
+        const selectedAddress = data.roadAddress || data.jibunAddress || "";
+        const selectedZipCode = data.zonecode || "";
+        setFormData((prev) => ({
+          ...prev,
+          deliveryAddress: selectedAddress,
+          deliveryZipCode: selectedZipCode,
+        }));
+        setIsAddressVerifiedByPostcode(true);
+
+        setTimeout(() => {
+          deliveryAddressDetailInputRef.current?.focus();
+        }, 0);
+      },
+    }).open();
+  };
   
   // 주소 선택 시 폼 자동 채우기
   const fillFormFromAddress = (address) => {
@@ -220,6 +304,8 @@ export default function Checkout() {
     if (addressNo === "new") {
       setUseNewAddress(true);
       setSelectedAddressId(null);
+      setSaveNewAddress(false);
+      setIsAddressVerifiedByPostcode(false);
       // 폼 초기화 (이메일은 유지)
       setFormData(prev => ({
         ...prev,
@@ -232,6 +318,8 @@ export default function Checkout() {
     } else {
       setUseNewAddress(false);
       setSelectedAddressId(addressNo);
+      setSaveNewAddress(false);
+      setIsAddressVerifiedByPostcode(true);
       const selectedAddress = savedAddresses.find(addr => addr.addressNo === Number(addressNo));
       if (selectedAddress) {
         fillFormFromAddress(selectedAddress);
@@ -393,100 +481,78 @@ export default function Checkout() {
   const validUsePointAmount = Math.max(0, Math.min(usePointAmount, maxUsablePoint));
   const finalPrice = Math.max(0, selectedTotalPrice - validUsePointAmount);
 
-  // v2 결제위젯 스크립트 로드 및 렌더링
+  latestPayAmountRef.current = Number(finalPrice || selectedTotalPrice || 0);
+
+  // 결제위젯: 로그인 확인 후 1회만 마운트 (finalPrice 변경마다 재초기화하면 렌더 도중 requestPayment → "결제 UI가 아직 렌더링되지 않았습니다")
   useEffect(() => {
-    // Checkout 페이지에서는 헤더의 "퀵 장바구니" 버튼(모달 오픈)을 비활성화한다
-    // 정확 타겟: [data-bs-target="#shoppingCart"], a[href="#shoppingCart"]
-    const selector = '[data-bs-target="#shoppingCart"], a[href="#shoppingCart"]';
+    if (!actuallyLoggedIn || isCheckingLogin) {
+      return undefined;
+    }
 
-    // 1) 마운트 시점에 즉시 비활성화(첫 클릭부터 차단)
-    const quickCartLinks = Array.from(document.querySelectorAll(selector));
-    quickCartLinks.forEach((el) => {
-      try {
-        el.setAttribute("aria-disabled", "true");
-        el.style.pointerEvents = "none";
-        el.style.opacity = "0.5";
-        // 개별 안전장치: 요소 자체 클릭 차단
-        const onClick = (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-        };
-        el.__quickCartBlocker__ = onClick;
-        el.addEventListener("click", onClick, true);
-      } catch {}
-    });
-
-    // 2) 문서 단위 캡처 리스너(동적 요소 대비). 정확 셀렉터만 차단
-    const disableQuickCart = (e) => {
-      const target = e.target && e.target.closest ? e.target.closest(selector) : null;
-      if (!target) return;
-      e.preventDefault();
-      e.stopPropagation();
-    };
-    document.addEventListener("click", disableQuickCart, true);
+    let cancelled = false;
 
     const loadV2Script = () =>
       new Promise((resolve, reject) => {
         if (window?.PaymentWidget) return resolve();
         const script = document.createElement("script");
-        // v2 결제위젯(브라우저 스크립트 버전)
         script.src = "https://js.tosspayments.com/v1/payment-widget";
         script.onload = () => resolve();
         script.onerror = (e) => reject(e);
         document.head.appendChild(script);
       });
+
     const initWidget = async () => {
+      paymentWidgetReadyRef.current = false;
+      paymentMethodsRef.current = null;
       try {
         await loadV2Script();
+        if (cancelled) return;
         const clientKey =
           process.env.NEXT_PUBLIC_TOSS_CLIENT_KEY ||
           "test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm";
         const customerKey = `cust-${Math.max(1, Number(Date.now() % 1000000))}`;
-        // 스크립트 버전: 전역 PaymentWidget 함수 사용 (constructor 아님)
         if (typeof window.PaymentWidget !== "function") {
           throw new Error("PaymentWidget not found on window");
         }
         const widget = window.PaymentWidget(clientKey, customerKey);
         paymentWidgetRef.current = widget;
-        // 금액 설정 및 UI 렌더
-        const amount = Number(finalPrice || selectedTotalPrice || 0);
+        const amount = latestPayAmountRef.current;
         const methods = await widget.renderPaymentMethods("#payment-methods", { value: amount });
+        if (cancelled) return;
         paymentMethodsRef.current = methods;
         await widget.renderAgreement("#agreement");
+        if (cancelled) return;
         paymentWidgetReadyRef.current = true;
-      } catch (e) {
-        console.error("[Checkout v2] widget init failed:", e);
-      }
-    };
-    // 선택 금액/포인트 변경 시 금액 업데이트
-    const updateAmount = async () => {
-      try {
-        if (!paymentMethodsRef.current) return;
-        await paymentMethodsRef.current.updateAmount(Number(finalPrice || selectedTotalPrice || 0));
-      } catch (e) {
-        // ignore
-      }
-    };
-    // 최초 로드 시 위젯 초기화
-    initWidget();
-    // 금액 변경 시 업데이트
-    updateAmount();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    return () => {
-      // 리스너/스타일 정리 (다른 페이지로 이동 시 부작용 방지)
-      document.removeEventListener("click", disableQuickCart, true);
-      quickCartLinks.forEach((el) => {
         try {
-          el.removeAttribute("aria-disabled");
-          el.style.pointerEvents = "";
-          el.style.opacity = "";
-          if (el.__quickCartBlocker__) {
-            el.removeEventListener("click", el.__quickCartBlocker__, true);
-            delete el.__quickCartBlocker__;
-          }
-        } catch {}
-      });
+          await paymentMethodsRef.current.updateAmount(latestPayAmountRef.current);
+        } catch (e) {
+          console.warn("[Checkout] 위젯 초기 금액 동기화:", e);
+        }
+      } catch (e) {
+        console.error("[Checkout] 결제위젯 초기화 실패:", e);
+        paymentWidgetReadyRef.current = false;
+      }
     };
+
+    initWidget();
+
+    return () => {
+      cancelled = true;
+      paymentWidgetReadyRef.current = false;
+    };
+  }, [actuallyLoggedIn, isCheckingLogin]);
+
+  // 포인트·세일 등으로 금액만 바뀔 때 — 위젯 재생성 없이 금액만 반영
+  useEffect(() => {
+    const run = async () => {
+      if (!paymentWidgetReadyRef.current || !paymentMethodsRef.current) return;
+      try {
+        await paymentMethodsRef.current.updateAmount(latestPayAmountRef.current);
+      } catch (e) {
+        console.warn("[Checkout] updateAmount:", e);
+      }
+    };
+    run();
   }, [finalPrice, selectedTotalPrice]);
   
   // 주문 버튼 클릭 핸들러
@@ -540,6 +606,10 @@ export default function Checkout() {
       alert("배송지 주소를 입력해주세요.");
       return;
     }
+    if (useNewAddress && !isAddressVerifiedByPostcode) {
+      alert("신규 배송지는 주소 검색을 통해 선택해주세요.");
+      return;
+    }
     if (!formData.paymentMethod) {
       alert("결제 방법을 선택해주세요.");
       return;
@@ -584,6 +654,26 @@ export default function Checkout() {
       if (usePointAmount > selectedTotalPrice) {
         alert("포인트 사용 금액은 주문 금액을 초과할 수 없습니다.");
         return;
+      }
+
+      if (actuallyLoggedIn && useNewAddress && saveNewAddress) {
+        try {
+          await addAddress({
+            recipientName: formData.recipientName.trim(),
+            recipientPhone: formData.phone.trim(),
+            deliveryAddress: formData.deliveryAddress.trim(),
+            deliveryAddressDetail: formData.deliveryAddressDetail.trim() || null,
+            deliveryZipCode: formData.deliveryZipCode.trim() || null,
+            isDefault: false,
+          });
+
+          const response = await getAddresses();
+          const refreshedAddresses = response.data || response || [];
+          setSavedAddresses(refreshedAddresses);
+        } catch (saveAddressError) {
+          console.error("주소 저장 실패:", saveAddressError);
+          alert("주소 저장에 실패했습니다. 입력한 주소로 주문은 계속 진행됩니다.");
+        }
       }
 
       const orderData = {
@@ -647,11 +737,30 @@ export default function Checkout() {
     }
   };
   return (
-    <section>
+    <>
+      <style>{`
+        @media (min-width: 1200px) {
+          .checkout-scroll-pane {
+            max-height: calc(100dvh - 140px);
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            -webkit-overflow-scrolling: touch;
+            padding-right: 4px;
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+          }
+
+          .checkout-scroll-pane::-webkit-scrollbar {
+            width: 0;
+            height: 0;
+          }
+        }
+      `}</style>
+      <section>
       <div className="container">
-        <div className="row">
+        <div className="row align-items-start">
           <div className="col-xl-6">
-            <div className="flat-spacing tf-page-checkout">
+            <div className="flat-spacing tf-page-checkout checkout-scroll-pane">
               {!actuallyLoggedIn && !isCheckingLogin && (
                 <div className="wrap">
                   <div className="title-login">
@@ -675,35 +784,36 @@ export default function Checkout() {
                 </div>
               )}
               <div className="wrap">
-                <h5 className="title">배송 정보</h5>
-                {actuallyLoggedIn && savedAddresses.length > 0 && (
-                  <div style={{ marginBottom: "20px", padding: "15px", backgroundColor: "#f9f9f9", borderRadius: "4px" }}>
-                    <label style={{ display: "block", marginBottom: "10px", fontWeight: "bold", fontSize: "14px" }}>
-                      저장된 주소 선택
-                    </label>
-                    <select
-                      value={useNewAddress ? "new" : selectedAddressId}
-                      onChange={(e) => handleAddressSelect(e.target.value)}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "10px",
+                    marginBottom: "12px",
+                  }}
+                >
+                  <h5 className="title" style={{ marginBottom: 0 }}>배송 정보</h5>
+                  {actuallyLoggedIn && (
+                    <button
+                      type="button"
+                      className="tf-btn btn-reset btn-md radius-4"
+                      onClick={handleReloadMyInfo}
+                      disabled={isReloadingMyInfo}
                       style={{
-                        width: "100%",
-                        padding: "10px",
-                        marginBottom: "10px",
-                        border: "1px solid #ddd",
-                        borderRadius: "4px",
-                        fontSize: "14px",
+                        padding: "8px 14px",
+                        fontSize: "12px",
+                        lineHeight: 1.2,
+                        whiteSpace: "nowrap",
+                        cursor: isReloadingMyInfo ? "default" : "pointer",
                       }}
                     >
-                      <option value="new">새 주소 입력</option>
-                      {savedAddresses.map((address) => (
-                        <option key={address.addressNo} value={address.addressNo}>
-                          {address.isDefault && "[기본] "}
-                          {address.recipientName} - {address.deliveryAddress}
-                          {address.deliveryAddressDetail ? ` ${address.deliveryAddressDetail}` : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                      <span className="text">
+                        {isReloadingMyInfo ? "불러오는 중..." : "내 정보 불러오기"}
+                      </span>
+                    </button>
+                  )}
+                </div>
                 <form className="info-box" onSubmit={(e) => e.preventDefault()}>
                   <div className="grid-2">
                     <input 
@@ -733,14 +843,46 @@ export default function Checkout() {
                     </div>
                     <div></div>
                   </div>
+                  {actuallyLoggedIn && (
+                    <div style={{ marginBottom: "16px" }}>
+                      <select
+                        value={useNewAddress ? "new" : selectedAddressId}
+                        onChange={(e) => handleAddressSelect(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "10px",
+                          border: "1px solid #ddd",
+                          borderRadius: "6px",
+                          fontSize: "14px",
+                          backgroundColor: "#fff",
+                        }}
+                      >
+                        <option value="new">직접 입력</option>
+                        {savedAddresses.length > 0 ? (
+                          savedAddresses.map((address) => (
+                            <option key={address.addressNo} value={address.addressNo}>
+                              {address.isDefault && "[기본] "}
+                              {address.recipientName} - {address.deliveryAddress}
+                              {address.deliveryAddressDetail ? ` ${address.deliveryAddressDetail}` : ""}
+                            </option>
+                          ))
+                        ) : (
+                          <option value="new" disabled>
+                            저장된 주소가 없습니다
+                          </option>
+                        )}
+                      </select>
+                    </div>
+                  )}
                   <div className="grid-2">
                     <input 
                       type="text" 
-                      placeholder="시/군/구*" 
+                      placeholder="기본 주소*" 
                       value={formData.deliveryAddress}
-                      onChange={(e) => setFormData({...formData, deliveryAddress: e.target.value})}
+                      readOnly
                     />
                     <input 
+                      ref={deliveryAddressDetailInputRef}
                       type="text" 
                       placeholder="상세 주소*" 
                       value={formData.deliveryAddressDetail}
@@ -750,12 +892,36 @@ export default function Checkout() {
                   <div className="grid-2">
                     <input 
                       type="text" 
-                      placeholder="우편번호 (선택사항)" 
+                      placeholder="우편번호*" 
                       value={formData.deliveryZipCode}
-                      onChange={(e) => setFormData({...formData, deliveryZipCode: e.target.value})}
+                      readOnly
                     />
-                    <div></div>
+                    <button
+                      type="button"
+                      className="tf-btn btn-reset btn-md radius-4"
+                      onClick={handleSearchAddress}
+                      disabled={!isAddressScriptReady}
+                    >
+                      <span className="text">
+                        {isAddressScriptReady ? "주소 검색" : "주소 검색 준비 중..."}
+                      </span>
+                    </button>
                   </div>
+                  {useNewAddress && (
+                    <p className="text-caption-1 text-secondary mb-2">
+                      신규 주소는 "주소 검색"으로 선택해주세요.
+                    </p>
+                  )}
+                  {actuallyLoggedIn && useNewAddress && (
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                      <input
+                        type="checkbox"
+                        checked={saveNewAddress}
+                        onChange={(e) => setSaveNewAddress(e.target.checked)}
+                      />
+                      <span className="text-caption-1">이번 배송지를 내 주소록에 저장</span>
+                    </label>
+                  )}
                   <textarea 
                     placeholder="배송 메모 (선택사항)..." 
                     value={formData.orderMemo}
@@ -764,7 +930,7 @@ export default function Checkout() {
                 </form>
               </div>
               <div className="wrap">
-                <h5 className="title">결제 방법 선택:</h5>
+                <h5 className="title">결제 수단</h5>
                 <form
                   className="form-payment"
                   onSubmit={(e) => e.preventDefault()}
@@ -810,7 +976,7 @@ export default function Checkout() {
             <div className="line-separation" />
           </div>
           <div className="col-xl-5">
-            <div className="flat-spacing flat-sidebar-checkout">
+            <div className="flat-spacing flat-sidebar-checkout checkout-scroll-pane">
               <div className="sidebar-checkout-content">
                 <h5 className="title">장바구니 {selectedItems.length > 0 && `(${selectedItems.length})`}</h5>
                 <div className="list-product">
@@ -822,7 +988,7 @@ export default function Checkout() {
                         className="img-product"
                       >
                         <Image
-                          alt="img-product"
+                          alt="상품 이미지"
                           src={elm.imgSrc}
                           width={600}
                           height={800}
@@ -844,10 +1010,7 @@ export default function Checkout() {
                                 {elm.color && <span className="color">{elm.color}</span>}
                               </>
                             ) : (
-                              <>
-                                <span className="size">XL</span>/
-                                <span className="color">Blue</span>
-                              </>
+                              <span className="text-secondary">—</span>
                             )}
                           </div>
                         </div>
@@ -871,10 +1034,10 @@ export default function Checkout() {
                                       className="text-caption-1 text-secondary"
                                       style={{ textDecoration: "line-through" }}
                                     >
-                                      ₩{baseUnitPrice.toLocaleString()}
+                                      {formatKrw(baseUnitPrice)}
                                     </span>
                                   )}
-                                  <span>₩{adjustedUnitPrice.toLocaleString()}</span>
+                                  <span>{formatKrw(adjustedUnitPrice)}</span>
                                 </>
                               );
                             })()}
@@ -891,68 +1054,6 @@ export default function Checkout() {
                       </Link>
                     </div>
                   )}
-                </div>
-                <div className="sec-discount">
-                  <Swiper
-                    dir="ltr"
-                    className="swiper tf-sw-categories"
-                    slidesPerView={2.25} // data-preview="2.25"
-                    breakpoints={{
-                      1024: {
-                        slidesPerView: 2.25, // data-tablet={3}
-                      },
-                      768: {
-                        slidesPerView: 3, // data-tablet={3}
-                      },
-                      640: {
-                        slidesPerView: 2.5, // data-mobile-sm="2.5"
-                      },
-                      0: {
-                        slidesPerView: 1.2, // data-mobile="1.2"
-                      },
-                    }}
-                    spaceBetween={20}
-                  >
-                    {discounts.map((item, index) => (
-                      <SwiperSlide key={index}>
-                        <div
-                          className={`box-discount ${
-                            activeDiscountIndex === index ? "active" : ""
-                          }`}
-                          onClick={() => setActiveDiscountIndex(index)}
-                        >
-                          <div className="discount-top">
-                            <div className="discount-off">
-                              <div className="text-caption-1">Discount</div>
-                              <span className="sale-off text-btn-uppercase">
-                                {item.discount}
-                              </span>
-                            </div>
-                            <div className="discount-from">
-                              <p className="text-caption-1">{item.details}</p>
-                            </div>
-                          </div>
-                          <div className="discount-bot">
-                            <span className="text-btn-uppercase">
-                              {item.code}
-                            </span>
-                            <button className="tf-btn">
-                              <span className="text">Apply Code</span>
-                            </button>
-                          </div>
-                        </div>{" "}
-                      </SwiperSlide>
-                    ))}
-                  </Swiper>
-                  <div className="ip-discount-code">
-                    <input type="text" placeholder="할인 쿠폰 코드 입력" />
-                    <button className="tf-btn">
-                      <span className="text">적용</span>
-                    </button>
-                  </div>
-                  <p>
-                    할인 코드는 상품 총액이 50만원 이상인 주문에만 사용 가능합니다.
-                  </p>
                 </div>
                 {/* 포인트 사용 섹션 */}
                 {actuallyLoggedIn && pointBalance > 0 && (
@@ -1018,37 +1119,42 @@ export default function Checkout() {
                             : undefined
                         }
                       >
-                        ₩{selectedBaseTotalPrice.toLocaleString()}
+                        {formatKrw(selectedBaseTotalPrice)}
                       </span>
                     </div>
                     {selectedSaleDiscountAmount > 0 && (
                       <div className="item d-flex align-items-center justify-content-between text-button text-danger">
                         <span>세일 할인</span>
-                        <span>-₩{selectedSaleDiscountAmount.toLocaleString()}</span>
+                        <span>-{formatKrw(selectedSaleDiscountAmount)}</span>
                       </div>
                     )}
                     {selectedSaleDiscountAmount > 0 && (
                       <div className="item d-flex align-items-center justify-content-between text-button">
                         <span>세일 적용 금액</span>
-                        <span>₩{selectedTotalPrice.toLocaleString()}</span>
+                        <span>{formatKrw(selectedTotalPrice)}</span>
                       </div>
                     )}
                     {validUsePointAmount > 0 && (
                       <div className="item d-flex align-items-center justify-content-between text-button text-success">
                         <span>포인트 할인</span>
-                        <span>-₩{validUsePointAmount.toLocaleString()}</span>
+                        <span>-{formatKrw(validUsePointAmount)}</span>
                       </div>
                     )}
+                    <p className="text-caption-1 text-secondary mb-1 small">
+                      전 상품 무료배송
+                    </p>
                     <div className="item d-flex align-items-center justify-content-between text-button">
                       <span>배송비</span>
-                      <span>무료</span>
+                      <span>
+                        {selectedItems.length === 0 ? "—" : "무료"}
+                      </span>
                     </div>
                   </div>
                   <div className="bottom">
                     <h5 className="d-flex justify-content-between">
                       <span>최종 결제 금액</span>
                       <span className="total-price-checkout">
-                        ₩{finalPrice.toLocaleString()}
+                        {formatKrw(finalPrice)}
                       </span>
                     </h5>
                   </div>
@@ -1059,5 +1165,6 @@ export default function Checkout() {
         </div>
       </div>
     </section>
+    </>
   );
 }

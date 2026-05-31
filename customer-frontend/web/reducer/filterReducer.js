@@ -1,5 +1,3 @@
-import { productMain } from "@/data/products";
-
 export const initialState = {
   price: [20, 300],
 
@@ -9,9 +7,9 @@ export const initialState = {
   size: "All",
   activeFilterOnSale: false,
   brands: [],
-  filtered: productMain,
-  sortingOption: "Sort by (Default)",
-  sorted: productMain,
+  filtered: [],
+  sortingOption: "신상품순",
+  sorted: [],
   currentPage: 1,
   itemPerPage: 6,
 };

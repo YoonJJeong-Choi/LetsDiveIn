@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { getMe, updateProfile, changePassword } from "@/lib/api/customer";
+import Address from "@/components/my-account/Address";
 
 export default function Information() {
   const [loading, setLoading] = useState(false);
@@ -140,7 +141,7 @@ export default function Information() {
           className="form-account-details form-has-password"
         >
           <div className="account-info">
-            <h5 className="title">Information</h5>
+            <h5 className="title">기본 정보</h5>
             <div className="cols mb_20">
               <fieldset className="">
                 <input
@@ -165,9 +166,6 @@ export default function Information() {
                   disabled
                   style={{ backgroundColor: "#f5f5f5", cursor: "not-allowed" }}
                 />
-                <small style={{ color: "#999", fontSize: "12px", display: "block", marginTop: "4px" }}>
-                  이메일은 보안상 수정할 수 없습니다.
-                </small>
               </fieldset>
             </div>
             <div className="cols mb_20">
@@ -181,9 +179,6 @@ export default function Information() {
                   disabled
                   style={{ backgroundColor: "#f5f5f5", cursor: "not-allowed" }}
                 />
-                <small style={{ color: "#999", fontSize: "12px", display: "block", marginTop: "4px" }}>
-                  생년월일은 결제 시스템과 연관되어 수정할 수 없습니다.
-                </small>
               </fieldset>
             </div>
           </div>
@@ -199,6 +194,26 @@ export default function Information() {
             </button>
           </div>
         </form>
+        <div
+          style={{
+            height: "1px",
+            width: "100%",
+            backgroundColor: "#d9d9d9",
+            margin: "32px 0",
+          }}
+        />
+        <div style={{ marginTop: "40px" }}>
+          <h5 className="title mb_20">배송지 관리</h5>
+          <Address embedded />
+        </div>
+        <div
+          style={{
+            height: "1px",
+            width: "100%",
+            backgroundColor: "#d9d9d9",
+            margin: "32px 0",
+          }}
+        />
 
         {/* 비밀번호 변경 폼 */}
         <form
@@ -207,7 +222,7 @@ export default function Information() {
           style={{ marginTop: "40px" }}
         >
           <div className="account-password">
-            <h5 className="title">Change Password</h5>
+            <h5 className="title">비밀번호 변경</h5>
             <fieldset className="position-relative password-item mb_20">
               <input
                 className="input-password"

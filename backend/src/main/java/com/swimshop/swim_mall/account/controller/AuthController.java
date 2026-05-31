@@ -50,8 +50,8 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<AuthLoginResponseDto> me(HttpSession session) {
-        AuthLoginResponseDto res = authService.getCurrentUser(session);
+    public ResponseEntity<AuthLoginResponseDto> me(HttpSession session, HttpServletRequest httpRequest) {
+        AuthLoginResponseDto res = authService.getCurrentUser(session, httpRequest);
         return ResponseEntity.ok(res);
     }
 

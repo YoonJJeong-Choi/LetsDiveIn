@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { getMe } from "@/lib/api/auth";
+import { getMe, isPortalAccessError } from "@/lib/api/auth";
 
 export default function MyAccountAuthGate({ children }) {
   const router = useRouter();
@@ -13,19 +13,22 @@ export default function MyAccountAuthGate({ children }) {
     let cancelled = false;
     (async () => {
       try {
-        const user = await getMe();
+        const user = await getMe({ throwOnForbidden: true });
         if (cancelled) return;
         if (!user) {
-          alert("로그인이 필요합니다.");
           const next = encodeURIComponent(pathname || "/my-account");
           router.replace(`/login?next=${next}`);
           return;
         }
         setAllowed(true);
-      } catch {
+      } catch (err) {
         if (cancelled) return;
-        alert("로그인이 필요합니다.");
         const next = encodeURIComponent(pathname || "/my-account");
+        if (isPortalAccessError(err)) {
+          router.replace(`/login?reason=portal&next=${next}`);
+          return;
+        }
+        alert("로그인이 필요합니다.");
         router.replace(`/login?next=${next}`);
       }
     })();

@@ -1,24 +1,44 @@
-import axios from "axios";
+import { api } from "./http";
 
-const baseURL =
-  typeof window !== "undefined"
-    ? (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080")
-    : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-
-const api = axios.create({
-  baseURL,
-  withCredentials: true,
-  headers: { "Content-Type": "application/json" },
-});
+function getOrCreateGuestId() {
+  if (typeof window === "undefined") return null;
+  try {
+    const key = "guest_view_id";
+    let guestId = localStorage.getItem(key);
+    if (!guestId) {
+      guestId = `guest_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      localStorage.setItem(key, guestId);
+    }
+    return guestId;
+  } catch (e) {
+    return null;
+  }
+}
 
 /**
  * 고객용 활성 상품 목록 조회
  * @returns {Promise<Array>} 상품 목록 (각 상품에 옵션 포함)
  * @throws {Error} 에러 발생 시 에러 메시지
  */
-export async function getActiveProductList({ page = 1, size = 12 } = {}) {
+export async function getActiveProductList({
+  page = 1,
+  size = 12,
+  saleOnly = false,
+  inStock = null,
+  sortBy = "latest",
+  sortDir = "desc",
+} = {}) {
   try {
-    const qp = { page: Math.max(0, Number(page) - 1), size };
+    const qp = {
+      page: Math.max(0, Number(page) - 1),
+      size,
+      saleOnly,
+      sortBy,
+      sortDir,
+    };
+    if (inStock !== null && inStock !== undefined) {
+      qp.inStock = inStock;
+    }
     const { data } = await api.get("/api/product/list/active", { params: qp });
     return data?.data || data;
   } catch (error) {
@@ -36,8 +56,17 @@ export async function getActiveProductList({ page = 1, size = 12 } = {}) {
         throw new Error(errorData);
       }
     }
-    
-    // 네트워크 에러 등
+
+    if (
+      error?.code === "ERR_NETWORK" ||
+      error?.message === "Network Error" ||
+      String(error?.message || "").includes("Network Error")
+    ) {
+      throw new Error(
+        "서버에 연결할 수 없습니다. Spring 백엔드(기본 http://localhost:8080)가 실행 중인지 확인하세요."
+      );
+    }
+
     throw error;
   }
 }
@@ -70,6 +99,14 @@ export async function searchProducts(searchParams = {}) {
     }
     if (searchParams.optionName) params.append('optionName', searchParams.optionName);
     if (searchParams.partnerBrandCode) params.append('partnerBrandCode', searchParams.partnerBrandCode);
+    if (searchParams.saleOnly !== undefined && searchParams.saleOnly !== null) {
+      params.append('saleOnly', String(Boolean(searchParams.saleOnly)));
+    }
+    if (searchParams.inStock !== undefined && searchParams.inStock !== null) {
+      params.append('inStock', String(Boolean(searchParams.inStock)));
+    }
+    if (searchParams.sortBy) params.append('sortBy', searchParams.sortBy);
+    if (searchParams.sortDir) params.append('sortDir', searchParams.sortDir);
     
     if (searchParams.page !== undefined && searchParams.page !== null) {
       const p = Math.max(0, Number(searchParams.page) - 1);
@@ -121,5 +158,44 @@ export async function getProductDetail(productNo) {
       }
     }
     throw error;
+  }
+}
+
+export async function incrementProductView(productNo) {
+  try {
+    const guestId = getOrCreateGuestId();
+    const { data } = await api.post(
+      `/api/product/${productNo}/view`,
+      {},
+      {
+        headers: guestId ? { "X-Guest-Id": guestId } : undefined,
+      }
+    );
+    const payload = data?.data ?? data;
+    return typeof payload === "number" ? payload : Number(payload || 0);
+  } catch (error) {
+    return 0;
+  }
+}
+
+export async function getProductView(productNo) {
+  try {
+    const { data } = await api.get(`/api/product/${productNo}/view`);
+    const payload = data?.data ?? data;
+    return typeof payload === "number" ? payload : Number(payload || 0);
+  } catch (error) {
+    return 0;
+  }
+}
+
+export async function getRelatedProducts(productNo, { color = null, limit = 8 } = {}) {
+  try {
+    const params = new URLSearchParams();
+    params.append("limit", String(limit));
+    if (color) params.append("color", color);
+    const { data } = await api.get(`/api/product/related/${productNo}?${params.toString()}`);
+    return data?.data ?? data ?? [];
+  } catch (error) {
+    return [];
   }
 }

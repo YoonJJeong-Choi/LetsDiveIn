@@ -50,6 +50,48 @@ AdminService.getPendingPartners = function () {
 	})
 }
 
+/** 관리자 대시보드 — 바로 처리할 일(대기 건수) 집계 */
+AdminService.getDashboardQueue = function () {
+	return fetch({
+		url: '/admin/dashboard/queue',
+		method: 'get'
+	})
+}
+
+/** 관리자 대시보드 전체 헬스(요약) */
+AdminService.getDashboardHealth = function () {
+	return fetch({
+		url: '/admin/dashboard/health',
+		method: 'get'
+	})
+}
+
+/** 관리자 대시보드 — 추이·랭킹·최근 주문/반품·정산 요약 (days: 14~30) */
+AdminService.getDashboardInsights = function (params = {}) {
+	return fetch({
+		url: '/admin/dashboard/insights',
+		method: 'get',
+		params
+	})
+}
+
+/** 관리자 분석 대시보드 — 긴 추이·파트너·시간대·이행 (trendDays: 7~90) */
+AdminService.getDashboardAnalytics = function (params = {}) {
+	return fetch({
+		url: '/admin/dashboard/analytics',
+		method: 'get',
+		params
+	})
+}
+
+/** 관리자 AI 운영 모니터링 요약 */
+AdminService.getAiOverview = function () {
+	return fetch({
+		url: '/admin/ai/overview',
+		method: 'get'
+	})
+}
+
 /**
  * 파트너를 승인합니다.
  * @param {Number} partnerId - 파트너 ID
@@ -1109,17 +1151,71 @@ AdminService.getAdminProductStatusCounts = function () {
 }
 
 /**
- * AI 반품 리스크 로그 조회 (관리자용)
- * @param {{success?: boolean|null, limit?: number}} params
+ * 관리자 컬러 목록 조회
  */
-AdminService.getReturnRiskLogs = function (params = {}) {
-	const queryParams = {}
-	if (params.success === true || params.success === false) queryParams.success = params.success
-	if (params.limit !== undefined && params.limit !== null) queryParams.limit = params.limit
+AdminService.getAdminColors = function () {
 	return fetch({
-		url: '/admin/ai/return-risk/logs',
-		method: 'get',
-		params: queryParams
+		url: '/admin/colors',
+		method: 'get'
+	})
+}
+
+/**
+ * 활성 컬러 목록 조회 (공개/파트너/고객 공용)
+ */
+AdminService.getActiveColors = function () {
+	return fetch({
+		url: '/colors',
+		method: 'get'
+	})
+}
+
+/**
+ * 관리자 컬러 생성/업서트
+ * @param {{code:string,label:string,hex?:string|null,sortOrder?:number,isActive?:boolean}} data
+ */
+AdminService.createAdminColor = function (data) {
+	return fetch({
+		url: '/admin/colors',
+		method: 'post',
+		data
+	})
+}
+
+/**
+ * 관리자 컬러 활성화/비활성화
+ * @param {string} code
+ * @param {boolean} isActive
+ */
+AdminService.updateAdminColorStatus = function (code, isActive) {
+	return fetch({
+		url: `/admin/colors/${code}/status`,
+		method: 'patch',
+		data: { isActive }
+	})
+}
+
+/**
+ * 관리자 컬러 유사어 추가
+ * @param {string} code
+ * @param {string} synonym
+ */
+AdminService.addAdminColorSynonym = function (code, synonym) {
+	return fetch({
+		url: `/admin/colors/${code}/synonyms`,
+		method: 'post',
+		data: { synonym }
+	})
+}
+
+/**
+ * 관리자 컬러 유사어 삭제
+ * @param {number} synonymId
+ */
+AdminService.deleteAdminColorSynonym = function (synonymId) {
+	return fetch({
+		url: `/admin/colors/synonyms/${synonymId}`,
+		method: 'delete'
 	})
 }
 

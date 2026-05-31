@@ -1,6 +1,5 @@
 import Footer1 from "@/components/footers/Footer1";
 import Header1 from "@/components/headers/Header1";
-import Topbar6 from "@/components/headers/Topbar6";
 import OrderConfirmation from "@/components/otherPages/OrderConfirmation";
 import Link from "next/link";
 import React from "react";
@@ -9,14 +8,13 @@ import React from "react";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "주문 완료 || Modave - Multipurpose React Nextjs eCommerce Template",
-  description: "Modave - Multipurpose React Nextjs eCommerce Template",
+  title: "주문 완료 || Let’s Dive In",
+  description: "주문이 완료되었습니다.",
 };
 
 export default function OrderConfirmationPage() {
   return (
     <>
-      <Topbar6 bgColor="bg-main" />
       <Header1 />
       <div
         className="page-title"

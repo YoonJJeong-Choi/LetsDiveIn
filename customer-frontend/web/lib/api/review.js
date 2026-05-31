@@ -1,15 +1,4 @@
-import axios from "axios";
-
-const baseURL =
-  typeof window !== "undefined"
-    ? (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080")
-    : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-
-const api = axios.create({
-  baseURL,
-  withCredentials: true,
-  headers: { "Content-Type": "application/json" },
-});
+import { api } from "./http";
 
 /**
  * 리뷰 작성
@@ -21,10 +10,14 @@ const api = axios.create({
  */
 export async function createReview(reviewData) {
   try {
+    const orderItemNo = Number(reviewData.orderItemNo);
     const { data } = await api.post("/api/reviews", {
-      orderItemNo: reviewData.orderItemNo,
+      orderItemNo: Number.isFinite(orderItemNo) ? orderItemNo : reviewData.orderItemNo,
       reviewContent: reviewData.reviewContent,
       reviewRating: reviewData.reviewRating,
+      ...(Array.isArray(reviewData.imageFileIds) && reviewData.imageFileIds.length > 0
+        ? { imageFileIds: reviewData.imageFileIds }
+        : {}),
     });
     return data.data || data;
   } catch (error) {

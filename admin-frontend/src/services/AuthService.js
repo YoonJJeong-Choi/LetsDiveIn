@@ -6,7 +6,10 @@ AuthService.login = function (data) {
 	return fetch({
 		url: '/auth/login',
 		method: 'post',
-		data: data
+		data: {
+			...data,
+			portal: 'ADMIN'
+		}
 	})
 }
 
@@ -21,14 +24,6 @@ AuthService.getCurrentUser = function () {
 	return fetch({
 		url: '/auth/me',
 		method: 'get'
-	})
-}
-
-AuthService.register = function (data) {
-	return fetch({
-		url: '/auth/register',
-		method: 'post',
-		data: data
 	})
 }
 

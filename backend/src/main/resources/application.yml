@@ -4,13 +4,50 @@ spring:
 
 app:
   public-base-url: ${APP_PUBLIC_BASE_URL:${app.base-url:http://localhost:8080}}
+  # 이메일 인증 완료 후 브라우저 리다이렉트 대상 (고객 Next 앱)
+  customer-frontend-url: ${APP_CUSTOMER_FRONTEND_URL:http://localhost:3000}
+  admin-frontend-url: ${APP_ADMIN_FRONTEND_URL:http://localhost:3001}
+  storage:
+    provider: ${STORAGE_PROVIDER:local}
+  file:
+    max-image-dimension: ${APP_FILE_MAX_IMAGE_DIMENSION:512}
+    # 비공개 파일 다운로드 서명 URL (반품·리뷰 이미지, AI fetch 등 공통)
+    signed-url:
+      signing-secret: ${FILE_SIGNED_URL_SIGNING_SECRET:${AI_IMAGE_SIGNING_SECRET:}}
+      ttl-seconds: ${FILE_SIGNED_URL_TTL_SECONDS:${AI_IMAGE_URL_TTL_SECONDS:600}}
+
+return:
+  assist:
+    enabled: ${RETURN_ASSIST_ENABLED:${RETURN_REVIEW_ASSIST_ENABLED:${AI_FEATURE_ENABLED:true}}}
 
 ai:
+  daily-limit:
+    enabled: ${AI_DAILY_LIMIT_ENABLED:true}
   openai:
+    # 로컬 개발: backend/.env 또는 환경변수 OPENAI_API_KEY (리뷰 분석 등)
     api-key: ${OPENAI_API_KEY:}
     model: ${OPENAI_MODEL:gpt-4o-mini}
-    timeout-ms: ${OPENAI_TIMEOUT_MS:5000}
-    max-tokens: ${OPENAI_MAX_TOKENS:256}
-  image-url:
-    signing-secret: ${AI_IMAGE_SIGNING_SECRET:}
-    ttl-seconds: ${AI_IMAGE_URL_TTL_SECONDS:600}
+    timeout-ms: ${OPENAI_TIMEOUT_MS:60000}
+  # 파트너 리뷰 AI: 조건(상품/옵션/기간) 적용 후 최신 N건 샘플
+  review-analysis:
+    recent-count: ${AI_REVIEW_ANALYSIS_RECENT_COUNT:3}
+    minimum-required: ${AI_REVIEW_ANALYSIS_MINIMUM_REQUIRED:3}
+    hard-cap: ${AI_REVIEW_ANALYSIS_HARD_CAP:10}
+    # Chat Completions JSON 응답용 (글로벌 max-tokens와 분리)
+    openai-max-output-tokens: ${AI_REVIEW_ANALYSIS_MAX_OUTPUT_TOKENS:4096}
+    daily-limit-partner: ${AI_REVIEW_ANALYSIS_DAILY_LIMIT_PARTNER:10}
+  qna-draft:
+    enabled: ${AI_QNA_DRAFT_ENABLED:true}
+    max-faq-context: ${AI_QNA_DRAFT_MAX_FAQ:5}
+    openai-max-output-tokens: ${AI_QNA_DRAFT_MAX_OUTPUT_TOKENS:1024}
+    daily-limit-admin: ${AI_QNA_DRAFT_DAILY_LIMIT_ADMIN:30}
+    daily-limit-partner: ${AI_QNA_DRAFT_DAILY_LIMIT_PARTNER:20}
+
+aws:
+  region: ${AWS_REGION:ap-northeast-2}
+  access-key-id: ${AWS_ACCESS_KEY_ID:}
+  secret-access-key: ${AWS_SECRET_ACCESS_KEY:}
+
+s3:
+  bucket: ${S3_BUCKET:}
+  presigned-ttl-sec: ${S3_PRESIGNED_TTL_SEC:600}

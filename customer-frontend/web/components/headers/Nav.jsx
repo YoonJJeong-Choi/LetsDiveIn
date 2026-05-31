@@ -65,7 +65,7 @@ function NavInner() {
 
       <li className={`menu-item ${isEvents ? "active" : ""}`}>
         <Link href="/events" className="item-link">
-          이벤트
+          이벤트·공지
         </Link>
       </li>
 

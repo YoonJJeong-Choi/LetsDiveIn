@@ -57,22 +57,6 @@ OrderService.getOrderForAdmin = function (orderNo) {
 }
 
 /**
- * 주문 상태 변경 (관리자만)
- * @param {Number} orderNo - 주문 번호
- * @param {String} orderStatus - 변경할 주문 상태 (예: "ACTIVE", "CANCELLED")
- * @returns {Promise} 업데이트된 주문 정보
- */
-OrderService.updateOrderStatus = function (orderNo, orderStatus) {
-	return fetch({
-		url: `/orders/${orderNo}/status`,
-		method: 'patch',
-		data: {
-			orderStatus: orderStatus
-		}
-	})
-}
-
-/**
  * 발주 확인 (파트너/관리자용) - 주문 전체 발주 확인 (레거시)
  * @deprecated 주문 상품별 발주 확인을 사용하세요. (confirmOrderItem)
  * @param {Number} orderNo - 주문 번호

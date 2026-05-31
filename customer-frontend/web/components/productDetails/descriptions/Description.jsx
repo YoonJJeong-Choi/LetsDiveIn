@@ -1,8 +1,43 @@
 import React from "react";
 import Image from "next/image";
+
+const parseStructuredSizeGuide = (sizeGuideJson, sizeGuideText) => {
+  const candidate = sizeGuideJson || sizeGuideText;
+  if (!candidate) return null;
+  try {
+    const parsed = JSON.parse(candidate);
+    if (!Array.isArray(parsed.rows) || parsed.rows.length === 0) {
+      return null;
+    }
+    if (parsed.templateKey || parsed.type) {
+      return parsed;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
 export default function Description({ product }) {
   // 상품 설명이 없으면 기본 메시지 표시
   const description = product?.description || "상품 설명이 없습니다.";
+  const materialInfo = product?.materialInfo;
+  const originCountry = product?.originCountry;
+  const manufactureCountry = product?.manufactureCountry;
+  const careInstructions = product?.careInstructions;
+  const sizeGuideText = product?.sizeGuideText;
+  const sizeGuideJson = product?.sizeGuideJson;
+  const options = Array.isArray(product?.options) ? product.options : [];
+  const structuredSizeGuide = parseStructuredSizeGuide(sizeGuideJson, sizeGuideText);
+  const sizeRows = options
+    .map((opt) => {
+      const raw = opt?.size;
+      if (!raw || typeof raw !== "string") return null;
+      const [sizeLabel, sizeCm] = raw.split("|");
+      if (!sizeCm) return null;
+      return { sizeLabel: sizeLabel || "-", sizeCm: sizeCm || "-" };
+    })
+    .filter(Boolean);
   
   return (
     <>
@@ -17,15 +52,12 @@ export default function Description({ product }) {
       </div>
       <div className="left">
         <div className="letter-1 text-btn-uppercase mb_12">
-          COMPOSITION, ORIGIN AND CARE GUIDELINES
+          소재 및 관리 안내
         </div>
         <ul className="list-text type-disc mb_12 gap-6">
-          <li className="font-2">
-            Composition: 55% polyester, 30% acrylic, 13% polyamide, 2% elastane
-          </li>
-          <li className="font-2">Designed in Barcelona</li>
-          <li className="font-2">Origin</li>
-          <li className="font-2">Manufacture: USA</li>
+          <li className="font-2">혼용률: {materialInfo || "-"}</li>
+          <li className="font-2">원산지: {originCountry || "-"}</li>
+          <li className="font-2">제조국: {manufactureCountry || "-"}</li>
         </ul>
         <div className="d-flex gap-20 mb_12 list-icon-guideline">
           <div className="d-flex">
@@ -210,8 +242,154 @@ export default function Description({ product }) {
           </div>
         </div>
         <div className="text-caption-2">
-          MACHINE WASHING MAX 30°C / 85ºF SHORT SPIN DRY
+          {careInstructions || "-"}
         </div>
+        <div className="letter-1 text-btn-uppercase mb_12 mt_24">사이즈표</div>
+        {structuredSizeGuide?.templateKey === "SWIMSUIT_WOMEN_ONEPIECE" || structuredSizeGuide?.type === "SWIMSUIT" ? (
+          <div style={{ overflowX: "auto" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                border: "1px solid #e5e5e5",
+              }}
+            >
+              <thead>
+                <tr>
+                  <th style={{ border: "1px solid #e5e5e5", padding: "8px", textAlign: "left" }}>사이즈</th>
+                  <th style={{ border: "1px solid #e5e5e5", padding: "8px", textAlign: "left" }}>가슴둘레(cm)</th>
+                  <th style={{ border: "1px solid #e5e5e5", padding: "8px", textAlign: "left" }}>허리둘레(cm)</th>
+                  <th style={{ border: "1px solid #e5e5e5", padding: "8px", textAlign: "left" }}>엉덩이둘레(cm)</th>
+                  <th style={{ border: "1px solid #e5e5e5", padding: "8px", textAlign: "left" }}>몸통둘레(cm)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {structuredSizeGuide.rows.map((row, idx) => (
+                  <tr key={`${row.sizeLabel || "row"}-${idx}`}>
+                    <td style={{ border: "1px solid #e5e5e5", padding: "8px" }}>{row.sizeLabel || "-"}</td>
+                    <td style={{ border: "1px solid #e5e5e5", padding: "8px" }}>{row.chestCm ?? "-"}</td>
+                    <td style={{ border: "1px solid #e5e5e5", padding: "8px" }}>{row.waistCm ?? "-"}</td>
+                    <td style={{ border: "1px solid #e5e5e5", padding: "8px" }}>{row.hipCm ?? "-"}</td>
+                    <td style={{ border: "1px solid #e5e5e5", padding: "8px" }}>{row.torsoCm ?? "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : structuredSizeGuide?.templateKey === "SWIMSUIT_WOMEN_BIKINI" ? (
+          <div style={{ overflowX: "auto" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                border: "1px solid #e5e5e5",
+              }}
+            >
+              <thead>
+                <tr>
+                  <th style={{ border: "1px solid #e5e5e5", padding: "8px", textAlign: "left" }}>사이즈</th>
+                  <th style={{ border: "1px solid #e5e5e5", padding: "8px", textAlign: "left" }}>가슴둘레(cm)</th>
+                  <th style={{ border: "1px solid #e5e5e5", padding: "8px", textAlign: "left" }}>허리둘레(cm)</th>
+                  <th style={{ border: "1px solid #e5e5e5", padding: "8px", textAlign: "left" }}>엉덩이둘레(cm)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {structuredSizeGuide.rows.map((row, idx) => (
+                  <tr key={`${row.sizeLabel || "row"}-${idx}`}>
+                    <td style={{ border: "1px solid #e5e5e5", padding: "8px" }}>{row.sizeLabel || "-"}</td>
+                    <td style={{ border: "1px solid #e5e5e5", padding: "8px" }}>{row.chestCm ?? "-"}</td>
+                    <td style={{ border: "1px solid #e5e5e5", padding: "8px" }}>{row.waistCm ?? "-"}</td>
+                    <td style={{ border: "1px solid #e5e5e5", padding: "8px" }}>{row.hipCm ?? "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : structuredSizeGuide?.templateKey === "SWIMSUIT_MEN_PANTS" ? (
+          <div style={{ overflowX: "auto" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                border: "1px solid #e5e5e5",
+              }}
+            >
+              <thead>
+                <tr>
+                  <th style={{ border: "1px solid #e5e5e5", padding: "8px", textAlign: "left" }}>사이즈</th>
+                  <th style={{ border: "1px solid #e5e5e5", padding: "8px", textAlign: "left" }}>허리둘레(cm)</th>
+                  <th style={{ border: "1px solid #e5e5e5", padding: "8px", textAlign: "left" }}>엉덩이둘레(cm)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {structuredSizeGuide.rows.map((row, idx) => (
+                  <tr key={`${row.sizeLabel || "row"}-${idx}`}>
+                    <td style={{ border: "1px solid #e5e5e5", padding: "8px" }}>{row.sizeLabel || "-"}</td>
+                    <td style={{ border: "1px solid #e5e5e5", padding: "8px" }}>{row.waistCm ?? "-"}</td>
+                    <td style={{ border: "1px solid #e5e5e5", padding: "8px" }}>{row.hipCm ?? "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : structuredSizeGuide?.templateKey === "FINS_SIZE" || structuredSizeGuide?.type === "FINS" ? (
+          <div style={{ overflowX: "auto" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                border: "1px solid #e5e5e5",
+              }}
+            >
+              <thead>
+                <tr>
+                  <th style={{ border: "1px solid #e5e5e5", padding: "8px", textAlign: "left" }}>신발사이즈(mm)</th>
+                  <th style={{ border: "1px solid #e5e5e5", padding: "8px", textAlign: "left" }}>발길이(cm)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {structuredSizeGuide.rows.map((row, idx) => (
+                  <tr key={`${row.sizeLabel || "row"}-${idx}`}>
+                    <td style={{ border: "1px solid #e5e5e5", padding: "8px" }}>{row.sizeLabel || "-"}</td>
+                    <td style={{ border: "1px solid #e5e5e5", padding: "8px" }}>{row.footLengthCm ?? "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : sizeRows.length > 0 ? (
+          <div style={{ overflowX: "auto" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                border: "1px solid #e5e5e5",
+              }}
+            >
+              <thead>
+                <tr>
+                  <th style={{ border: "1px solid #e5e5e5", padding: "8px", textAlign: "left" }}>사이즈</th>
+                  <th style={{ border: "1px solid #e5e5e5", padding: "8px", textAlign: "left" }}>cm</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sizeRows.map((row, idx) => (
+                  <tr key={`${row.sizeLabel}-${idx}`}>
+                    <td style={{ border: "1px solid #e5e5e5", padding: "8px" }}>{row.sizeLabel}</td>
+                    <td style={{ border: "1px solid #e5e5e5", padding: "8px" }}>{row.sizeCm}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div
+            className="text-secondary"
+            dangerouslySetInnerHTML={{
+              __html: (sizeGuideText || "-").replace(/\n/g, "<br />"),
+            }}
+          />
+        )}
       </div>
     </>
   );

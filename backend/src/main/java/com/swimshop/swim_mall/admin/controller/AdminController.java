@@ -15,9 +15,15 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.swimshop.swim_mall.account.service.AuthService;
 import com.swimshop.swim_mall.admin.dto.AdminBootstrapRequestDto;
+import com.swimshop.swim_mall.admin.dto.AdminDashboardQueueDto;
+import com.swimshop.swim_mall.admin.dto.AdminDashboardHealthDto;
+import com.swimshop.swim_mall.admin.dto.AdminDashboardAnalyticsDto;
+import com.swimshop.swim_mall.admin.dto.AdminDashboardInsightsDto;
+import com.swimshop.swim_mall.admin.dto.AdminAiUsageOverviewDto;
 import com.swimshop.swim_mall.admin.dto.PartnerChangeRequestRejectDto;
 import com.swimshop.swim_mall.admin.dto.PartnerRejectionRequestDto;
 import com.swimshop.swim_mall.admin.service.AdminService;
+import com.swimshop.swim_mall.admin.service.AdminAiOpsService;
 import com.swimshop.swim_mall.common.enums.AccountRole;
 import com.swimshop.swim_mall.common.enums.PartnerChangeRequestStatus;
 import com.swimshop.swim_mall.common.enums.PartnerStatus;
@@ -43,15 +49,11 @@ import com.swimshop.swim_mall.admin.dto.CustomerStatisticsDto;
 import com.swimshop.swim_mall.admin.dto.AdminCustomerUpdateRequestDto;
 import com.swimshop.swim_mall.admin.dto.CustomerGradeDto;
 import com.swimshop.swim_mall.admin.dto.CustomerGradeRequestDto;
-import com.swimshop.swim_mall.common.error.ErrorCode;
 import jakarta.validation.Valid;
 
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestParam;
 
 import java.time.LocalDate;
 
@@ -69,6 +71,7 @@ public class AdminController {
     private final InventoryService inventoryService;
     private final SettlementService settlementService;
     private final SettlementExportService settlementExportService;
+    private final AdminAiOpsService adminAiOpsService;
 
     /**
      * 최초 관리자 1명 생성. Admin이 한 명도 없을 때만 성공.
@@ -78,6 +81,62 @@ public class AdminController {
     public ResponseEntity<String> bootstrapFirstAdmin(@RequestBody AdminBootstrapRequestDto dto) {
         adminService.bootstrapFirstAdmin(dto);
         return ResponseEntity.ok("최초 관리자 계정이 생성되었습니다. 해당 이메일/비밀번호로 로그인하세요.");
+    }
+
+    /**
+     * 관리자 대시보드 처리 큐 집계
+     * GET /api/admin/dashboard/queue
+     */
+    @GetMapping("/dashboard/queue")
+    public ResponseEntity<ApiResponse<AdminDashboardQueueDto>> getAdminDashboardQueue(HttpSession session) {
+        authService.requireRole(session, AccountRole.ADMIN);
+        AdminDashboardQueueDto dto = adminService.getAdminDashboardQueue();
+        return ResponseEntity.ok(ApiResponse.success(dto));
+    }
+
+    /**
+     * 관리자 대시보드 전체 헬스(요약)
+     * GET /api/admin/dashboard/health
+     */
+    @GetMapping("/dashboard/health")
+    public ResponseEntity<ApiResponse<AdminDashboardHealthDto>> getAdminDashboardHealth(HttpSession session) {
+        authService.requireRole(session, AccountRole.ADMIN);
+        AdminDashboardHealthDto dto = adminService.getAdminDashboardHealth();
+        return ResponseEntity.ok(ApiResponse.success(dto));
+    }
+
+    /**
+     * 관리자 대시보드 — 추이·랭킹·최근 주문/반품·정산 요약
+     * GET /api/admin/dashboard/insights?days=30 (days: 14~30)
+     */
+    @GetMapping("/dashboard/insights")
+    public ResponseEntity<ApiResponse<AdminDashboardInsightsDto>> getAdminDashboardInsights(
+            HttpSession session,
+            @RequestParam(defaultValue = "30") int days
+    ) {
+        authService.requireRole(session, AccountRole.ADMIN);
+        AdminDashboardInsightsDto dto = adminService.getAdminDashboardInsights(days);
+        return ResponseEntity.ok(ApiResponse.success(dto));
+    }
+
+    /**
+     * 관리자 분석 대시보드 — 긴 추이·파트너·시간대·이행·리스크 집계
+     * GET /api/admin/dashboard/analytics?trendDays=30 (trendDays: 7~90)
+     */
+    @GetMapping("/dashboard/analytics")
+    public ResponseEntity<ApiResponse<AdminDashboardAnalyticsDto>> getAdminDashboardAnalytics(
+            HttpSession session,
+            @RequestParam(defaultValue = "30") int trendDays
+    ) {
+        authService.requireRole(session, AccountRole.ADMIN);
+        AdminDashboardAnalyticsDto dto = adminService.getAdminDashboardAnalytics(trendDays);
+        return ResponseEntity.ok(ApiResponse.success(dto));
+    }
+
+    @GetMapping("/ai/overview")
+    public ResponseEntity<ApiResponse<AdminAiUsageOverviewDto>> getAiOverview(HttpSession session) {
+        authService.requireRole(session, AccountRole.ADMIN);
+        return ResponseEntity.ok(ApiResponse.success(adminAiOpsService.getOverview()));
     }
 
     /**
