@@ -470,7 +470,6 @@ export default function Products12() {
                 >
                   <option value={12}>12개씩</option>
                   <option value={24}>24개씩</option>
-                  <option value={48}>48개씩</option>
                 </select>
               </div>
             </div>

@@ -1,6 +1,7 @@
 import React from 'react'
 import { SIDE_NAV_WIDTH, SIDE_NAV_COLLAPSED_WIDTH, NAV_TYPE_TOP } from 'constants/ThemeConstant';
 import { APP_NAME } from 'configs/AppConfig';
+import { ADMIN_LOGO_SRC } from 'configs/MediaConfig';
 import { useSelector } from 'react-redux';
 import utils from 'utils';
 import { Grid } from 'antd';
@@ -45,7 +46,7 @@ export const Logo = ({ mobileLogo, logoType }) => {
 	return (
 		<LogoWrapper className={isMobile && !mobileLogo ? 'd-none' : 'logo'} style={{width: `${getLogoWidthGutter()}`}}>
 			<img
-				src="/img/LetsDiveIn03.png"
+				src={ADMIN_LOGO_SRC}
 				alt={`${APP_NAME} logo`}
 				style={{
 					width: logoWidth,

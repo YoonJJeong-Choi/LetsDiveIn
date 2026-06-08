@@ -3,6 +3,7 @@ import { env } from './EnvironmentConfig'
 
 export const APP_NAME = 'SWIM MALL';
 export const API_BASE_URL = env.API_ENDPOINT_URL
+export const CUSTOMER_WEB_URL = env.CUSTOMER_WEB_URL
 export const APP_PREFIX_PATH = '/app';
 export const AUTH_PREFIX_PATH = '/auth';
 export const REDIRECT_URL_KEY = 'redirect'

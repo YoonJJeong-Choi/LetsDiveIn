@@ -14,19 +14,26 @@ const { useBreakpoint } = Grid;
 const setLocale = (localeKey, isLocaleOn = true) =>
 	isLocaleOn ? <IntlMessage id={localeKey} /> : localeKey.toString();
 
-const setDefaultOpen = (key) => {
-	let keyList = [];
-	let keyString = "";
-	if (key) {
-		const arr = key.split("-");
-		for (let index = 0; index < arr.length; index++) {
-			const elm = arr[index];
-			index === 0 ? (keyString = elm) : (keyString = `${keyString}-${elm}`);
-			keyList.push(keyString);
+/** 현재 메뉴의 부모 SubMenu key 목록 (NavigationConfig 트리 기준) */
+const findMenuAncestorKeys = (navItems, targetKey, ancestors = []) => {
+	if (!targetKey) {
+		return [];
+	}
+	for (const nav of navItems) {
+		if (nav.key === targetKey) {
+			return ancestors;
+		}
+		if (nav.submenu?.length > 0) {
+			const found = findMenuAncestorKeys(nav.submenu, targetKey, [...ancestors, nav.key]);
+			if (found) {
+				return found;
+			}
 		}
 	}
-	return keyList;
+	return null;
 };
+
+const resolveOpenKeys = (routeKey) => findMenuAncestorKeys(navigationConfig, routeKey) ?? [];
 
 const MenuItem = ({title, icon, path}) => {
 
@@ -93,10 +100,10 @@ const SideNavContent = (props) => {
 
 	const menuItems = useMemo(() => getSideNavMenuItem(navigationConfig, userRole), [userRole]);
 
-	const [openKeys, setOpenKeys] = useState(() => setDefaultOpen(routeKey));
+	const [openKeys, setOpenKeys] = useState(() => resolveOpenKeys(routeKey));
 
 	useEffect(() => {
-		setOpenKeys(setDefaultOpen(routeKey));
+		setOpenKeys(resolveOpenKeys(routeKey));
 	}, [routeKey]);
 
 	return (

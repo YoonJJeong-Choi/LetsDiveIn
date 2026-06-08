@@ -15,11 +15,12 @@ export default function PageNotFoundPage() {
           <div className="image">
             <Image
               className="lazyload"
-              data-src="/images/section/404.png"
-              alt="페이지를 찾을 수 없음 안내 이미지"
-              src="/images/section/404.png"
-              width={679}
-              height={701}
+              data-src="/images/logo/LetsDiveIn01.png"
+              alt="Let's Dive In 로고"
+              src="/images/logo/LetsDiveIn01.png"
+              width={400}
+              height={400}
+              style={{ width: "auto", height: "auto", maxWidth: "100%", objectFit: "contain" }}
             />
           </div>
           <div className="content">

@@ -5,6 +5,7 @@ import { Card, Table, Button, Modal, message, Tag, Space, Descriptions, Row, Col
 import { ShoppingCartOutlined, EyeOutlined, CheckCircleOutlined, BellOutlined, CarOutlined, EditOutlined, ReloadOutlined } from '@ant-design/icons';
 import OrderService from 'services/OrderService';
 import DeliveryService from 'services/DeliveryService';
+import { resolveMediaUrl } from 'utils/resolveMediaUrl';
 
 const getOrderStatusColor = (status) => {
 	switch (status) {
@@ -760,7 +761,7 @@ const OrderManagement = () => {
 										<div style={{ display: 'flex', gap: 16 }}>
 											{item.productImageUrl && (
 												<img 
-													src={item.productImageUrl} 
+													src={resolveMediaUrl(item.productImageUrl)} 
 													alt={item.productName}
 													style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 4 }}
 												/>

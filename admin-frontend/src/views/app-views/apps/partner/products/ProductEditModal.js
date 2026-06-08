@@ -4,6 +4,7 @@ import { PlusOutlined, MinusCircleOutlined, ExclamationCircleOutlined, UploadOut
 import FileService from 'services/FileService';
 import AdminProductService from 'services/AdminProductService';
 import AdminService from 'services/AdminService';
+import { resolveMediaUrl } from 'utils/resolveMediaUrl';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -416,7 +417,7 @@ const ProductEditModal = ({ visible, onCancel, onSubmit, loading, product, embed
 								]}
 							>
 								<Space style={{ alignItems: 'center' }}>
-									<img src={item.imageUrl} alt="" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 4 }} />
+									<img src={resolveMediaUrl(item.imageUrl)} alt="" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 4 }} />
 									<Radio
 										checked={!!item.isPrimary}
 										onChange={() => {

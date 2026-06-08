@@ -1,13 +1,16 @@
 const dev = {
-  API_ENDPOINT_URL: 'http://localhost:8080/api'
+  API_ENDPOINT_URL: 'http://localhost:8080/api',
+  CUSTOMER_WEB_URL: process.env.REACT_APP_CUSTOMER_WEB_URL || 'http://localhost:3000',
 };
 
 const prod = {
-  API_ENDPOINT_URL: '/api'
+  API_ENDPOINT_URL: '/api',
+  CUSTOMER_WEB_URL: process.env.REACT_APP_CUSTOMER_WEB_URL || '',
 };
 
 const test = {
-  API_ENDPOINT_URL: '/api'
+  API_ENDPOINT_URL: '/api',
+  CUSTOMER_WEB_URL: process.env.REACT_APP_CUSTOMER_WEB_URL || 'http://localhost:3000',
 };
 
 const getEnv = () => {

@@ -118,6 +118,9 @@ export default function RootLayout({ children }) {
   }, [pathname]);
   return (
     <html lang="ko">
+      <head>
+        <link rel="icon" href="/images/logo/icon.png" type="image/png" />
+      </head>
       <body className="preload-wrapper popup-loader">
         <Context>
           <div id="wrapper">{children}</div>
