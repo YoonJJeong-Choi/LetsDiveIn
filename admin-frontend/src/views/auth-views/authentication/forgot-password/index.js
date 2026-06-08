@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Card, Row, Col, Form, Input, Button, message } from "antd";
 import { MailOutlined } from '@ant-design/icons';
+import { ADMIN_LOGO_SRC } from 'configs/MediaConfig';
 
 const backgroundStyle = {
 	background: 'linear-gradient(135deg, #e6f4ff 0%, #f5f5f5 50%, #ffffff 100%)',
@@ -27,7 +28,7 @@ const ForgotPassword = () => {
 						<Card>
 							<div className="my-2">
 								<div className="text-center">
-									<img className="img-fluid" src="/img/LetsDiveIn03.png" alt="SWIM MALL logo" style={{ maxWidth: 160 }} />
+									<img className="img-fluid" src={ADMIN_LOGO_SRC} alt="SWIM MALL logo" style={{ maxWidth: 200, objectFit: 'contain' }} />
 									<h3 className="mt-3 font-weight-bold">Forgot Password?</h3>
 									<p className="mb-4">Enter your Email to reset password</p>
 								</div>

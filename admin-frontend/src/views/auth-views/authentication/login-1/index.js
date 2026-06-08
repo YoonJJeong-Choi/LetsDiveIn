@@ -1,6 +1,7 @@
 import React from 'react'
 import LoginForm from '../../components/LoginForm'
 import { Card, Row, Col } from "antd";
+import { ADMIN_LOGO_SRC } from 'configs/MediaConfig';
 
 const backgroundStyle = {
 	backgroundColor: '#eaf7ff'
@@ -17,7 +18,7 @@ const LoginOne = props => {
 								<div className="text-center">
 									<img
 										className="img-fluid mb-4"
-										src="/img/LetsDiveIn03.png"
+										src={ADMIN_LOGO_SRC}
 										alt="SWIM MALL logo"
 										style={{ maxWidth: 180, maxHeight: 80, objectFit: 'contain' }}
 									/>

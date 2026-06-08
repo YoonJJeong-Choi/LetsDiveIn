@@ -162,7 +162,7 @@ const appsNavTree = [{
           path: `${APP_PREFIX_PATH}/apps/order`,
           title: '주문 관리',
           icon: ShoppingCartOutlined,
-          breadcrumb: true,
+          breadcrumb: false,
           submenu: [],
         },
         {
@@ -254,7 +254,7 @@ const appsNavTree = [{
           path: `${APP_PREFIX_PATH}/apps/admin/qna-management`,
           title: 'QnA 관리',
           icon: MessageOutlined,
-          breadcrumb: true,
+          breadcrumb: false,
           submenu: []
         },
         {
@@ -297,6 +297,22 @@ const appsNavTree = [{
           icon: ShopOutlined,
           breadcrumb: true,
           submenu: []
+        },
+        {
+          key: 'partner-review',
+          path: `${APP_PREFIX_PATH}/partner/review`,
+          title: '리뷰 관리',
+          icon: CommentOutlined,
+          breadcrumb: false,
+          submenu: []
+        },
+        {
+          key: 'partner-qna',
+          path: `${APP_PREFIX_PATH}/partner/qna`,
+          title: 'QnA',
+          icon: MessageOutlined,
+          breadcrumb: false,
+          submenu: []
         }
       ],
       roles: ['PARTNER']
@@ -313,7 +329,7 @@ const appsNavTree = [{
           path: `${APP_PREFIX_PATH}/partner/order`,
           title: '주문 관리',
           icon: ShoppingCartOutlined,
-          breadcrumb: true,
+          breadcrumb: false,
           submenu: []
         },
         {
@@ -329,14 +345,6 @@ const appsNavTree = [{
           path: `${APP_PREFIX_PATH}/partner/sales-statistics`,
           title: '매출 현황',
           icon: BarChartOutlined,
-          breadcrumb: true,
-          submenu: []
-        },
-        {
-          key: 'partner-qna',
-          path: `${APP_PREFIX_PATH}/partner/qna`,
-          title: 'QnA',
-          icon: MessageOutlined,
           breadcrumb: true,
           submenu: []
         }
@@ -380,7 +388,7 @@ const appsNavTree = [{
           path: `${APP_PREFIX_PATH}/partner/sales`,
           title: '세일 관리',
           icon: DollarOutlined,
-          breadcrumb: true,
+          breadcrumb: false,
           submenu: []
         }
       ],
@@ -398,7 +406,7 @@ const appsNavTree = [{
           path: `${APP_PREFIX_PATH}/partner/settings`,
           title: '파트너 설정',
           icon: ShopOutlined,
-          breadcrumb: true,
+          breadcrumb: false,
           submenu: []
         }
       ],

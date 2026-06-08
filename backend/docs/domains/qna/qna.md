@@ -105,7 +105,7 @@ reply 본문: `{ "body": "..." }`.
 - 분당 한도: [security/RATE_LIMIT_OPERATION_GUIDE.md](../../security/RATE_LIMIT_OPERATION_GUIDE.md)
 - 운영: `/api/admin/ai/overview`, `qna_draft_log`
 
-리뷰 분석(`POST /api/ai/review-analysis/partner`)은 QnA와 별도 API다.
+리뷰 분석(`POST /api/ai/review-analysis/partner`)은 QnA와 별도 API다. 정본: [review-analysis.md](../review/review-analysis.md).
 
 ---
 

@@ -19,7 +19,7 @@ const assignBreadcrumbMap = (navItems) => {
 
 assignBreadcrumbMap(navigationConfig);
 
-const BreadcrumbRoute = props => {
+const BreadcrumbRoute = ({ fallbackTitle }) => {
 	const location = useLocation();
 	const fullPath = `${location.pathname}${location.search}`;
 	const pathSnippets = location.pathname.split('/').filter(i => i);
@@ -40,14 +40,22 @@ const BreadcrumbRoute = props => {
 			title: exactTitle
 		};
 	}
-  
+
+	if (breadcrumbItems.length === 0 && fallbackTitle) {
+		return (
+			<h3 className="mb-0 font-weight-semibold">
+				<IntlMessage id={fallbackTitle} />
+			</h3>
+		);
+	}
+
 	return (
 		<Breadcrumb items={breadcrumbItems} />
 	);
 };
 
-export const AppBreadcrumb = () => {
-	return <BreadcrumbRoute />
+export const AppBreadcrumb = ({ fallbackTitle }) => {
+	return <BreadcrumbRoute fallbackTitle={fallbackTitle} />
 }
 
 export default AppBreadcrumb

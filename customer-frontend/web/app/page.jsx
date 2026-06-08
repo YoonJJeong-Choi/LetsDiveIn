@@ -9,7 +9,7 @@ import Products from "@/components/common/Products3";
 import Testimonials from "@/components/common/Testimonials";
 
 export const metadata = {
-  title: "홈 || Let’s Dive In",
+  title: "Home || Let’s Dive In",
   description: "Let’s Dive In 공식 쇼핑몰",
 };
 

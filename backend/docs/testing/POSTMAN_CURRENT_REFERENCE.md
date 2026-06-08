@@ -137,6 +137,13 @@
 
 도메인·라우팅·시드: [domains/qna/qna.md](../domains/qna/qna.md).
 
+### 리뷰 AI 분석 (파트너)
+
+- `GET /api/reviews/partner/ai-candidates?productNo=…`
+- `POST /api/ai/review-analysis/partner`
+
+도메인·한도·fallback: [domains/review/review-analysis.md](../domains/review/review-analysis.md). 상세 요청 예: [POSTMAN_LEGACY_REFERENCE.md](POSTMAN_LEGACY_REFERENCE.md) § [AI] 리뷰 분석.
+
 ---
 
 ## 3. 관리자 `/api/admin/*` 등
@@ -168,4 +175,5 @@
 - [domains/payment/payment.md](../domains/payment/payment.md)
 - [domains/delivery/delivery.md](../domains/delivery/delivery.md)
 - [domains/qna/qna.md](../domains/qna/qna.md)
+- [domains/review/review-analysis.md](../domains/review/review-analysis.md)
 - [architecture/status/status-model.md](../architecture/status/status-model.md)

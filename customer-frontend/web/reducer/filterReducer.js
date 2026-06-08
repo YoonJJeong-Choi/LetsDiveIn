@@ -11,7 +11,7 @@ export const initialState = {
   sortingOption: "신상품순",
   sorted: [],
   currentPage: 1,
-  itemPerPage: 6,
+  itemPerPage: 12,
 };
 
 export function reducer(state, action) {

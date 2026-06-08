@@ -27,6 +27,7 @@
 | [domains/points/points.md](domains/points/points.md) | 포인트 |
 | [domains/qna/qna.md](domains/qna/qna.md) | 1:1 문의 (QnA) — 동작 정본 |
 | [domains/qna/qna-development.md](domains/qna/qna-development.md) | QnA 개발 스토리 (바이브 코딩 대표 사례) |
+| [domains/review/review-analysis.md](domains/review/review-analysis.md) | 파트너 리뷰 AI 분석 — 동작 정본 |
 | [domains/settlement/settlement.md](domains/settlement/settlement.md) | 정산 |
 
 ### `testing/`

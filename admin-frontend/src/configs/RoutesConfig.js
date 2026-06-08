@@ -12,16 +12,6 @@ export const publicRoutes = [
         path: `${AUTH_PREFIX_PATH}/forgot-password`,
         component: React.lazy(() => import('views/auth-views/authentication/forgot-password')),
     },
-    {
-        key: 'error-page-1',
-        path: `${AUTH_PREFIX_PATH}/error-page-1`,
-        component: React.lazy(() => import('views/auth-views/errors/error-page-1')),
-    },
-    {
-        key: 'error-page-2',
-        path: `${AUTH_PREFIX_PATH}/error-page-2`,
-        component: React.lazy(() => import('views/auth-views/errors/error-page-2')),
-    },
 ]
 
 const protectedRouteDefinitions = [
@@ -176,6 +166,11 @@ const protectedRouteDefinitions = [
         component: React.lazy(() => import('views/app-views/apps/partner/qna')),
     },
     {
+        key: 'partner.review',
+        path: `${APP_PREFIX_PATH}/partner/review`,
+        component: React.lazy(() => import('views/app-views/apps/review')),
+    },
+    {
         key: 'apps.admin.event-management',
         path: `${APP_PREFIX_PATH}/apps/admin/event-management`,
         component: React.lazy(() => import('views/app-views/apps/admin/event-management')),
@@ -194,22 +189,6 @@ const protectedRouteDefinitions = [
         key: 'forgot-password',
         path: `${APP_PREFIX_PATH}/forgot-password`,
         component: React.lazy(() => import('views/auth-views/authentication/forgot-password')),
-        meta: {
-            blankLayout: true
-        }
-    },
-    {
-        key: 'error-page-1',
-        path: `${APP_PREFIX_PATH}/error-page-1`,
-        component: React.lazy(() => import('views/auth-views/errors/error-page-1')),
-        meta: {
-            blankLayout: true
-        }
-    },
-    {
-        key: 'error-page-2',
-        path: `${APP_PREFIX_PATH}/error-page-2`,
-        component: React.lazy(() => import('views/auth-views/errors/error-page-2')),
         meta: {
             blankLayout: true
         }

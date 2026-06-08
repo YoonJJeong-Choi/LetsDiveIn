@@ -4,6 +4,8 @@ import { Card, Table, Button, Modal, message, Tag, Space, Row, Col, Select, Desc
 import { CommentOutlined, EyeOutlined, StarOutlined, UserOutlined, ShoppingCartOutlined, DeleteOutlined, EditOutlined, ThunderboltOutlined, CalendarOutlined } from '@ant-design/icons';
 import ReviewService from 'services/ReviewService';
 import PartnerService from 'services/PartnerService';
+import { resolveMediaUrl } from 'utils/resolveMediaUrl';
+import { ADMIN_LOGO_SRC } from 'configs/MediaConfig';
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
@@ -909,15 +911,6 @@ const ReviewManagement = () => {
 										</Card>
 									</Col>
 									<Col xs={24} md={12}>
-										<Card
-											size="small"
-											title="AI 권장 조치"
-											extra={(
-												<Tooltip title="선택한 리뷰 샘플을 읽고, 파트너 운영에 참고할 만한 개선 아이디어를 제안한 것입니다. 실행 여부는 직접 판단해 주세요.">
-													<span style={{ color: '#999', cursor: 'help', fontSize: 12 }}>?</span>
-												</Tooltip>
-											)}
-										>
 											<Typography.Paragraph type="secondary" style={{ marginBottom: 12, fontSize: 13 }}>
 												위 줄은 <strong>어느 영역</strong>을 손보면 좋을지, 그 아래는 <strong>무엇을 하면 좋을지</strong>입니다.
 											</Typography.Paragraph>
@@ -931,7 +924,6 @@ const ReviewManagement = () => {
 											) : (
 												<div>-</div>
 											)}
-										</Card>
 									</Col>
 								</Row>
 							</>
@@ -1068,12 +1060,12 @@ const ReviewManagement = () => {
 						<Descriptions.Item label="상품 정보">
 							<Space>
 								<Image
-									src={selectedReview.productImageUrl || '/img/LetsDiveIn03.png'}
+									src={resolveMediaUrl(selectedReview.productImageUrl) || ADMIN_LOGO_SRC}
 									alt={selectedReview.productName}
 									width={80}
 									height={80}
 									style={{ objectFit: 'cover', borderRadius: 4 }}
-									fallback="/img/LetsDiveIn03.png"
+									fallback={ADMIN_LOGO_SRC}
 								/>
 								<div>
 									<div style={{ fontWeight: 500, fontSize: 16 }}>

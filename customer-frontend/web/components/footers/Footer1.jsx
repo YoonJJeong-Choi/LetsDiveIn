@@ -61,7 +61,7 @@ export default function Footer1({
                       <Link href={`/`}>
                         <Image
                           alt=""
-                          src="/images/logo/LetsDiveIn01.png"
+                          src="/images/logo/LetsDiveIn03.png"
                           width={127}
                           height={24}
                           style={{ width: "auto", height: "auto" }}

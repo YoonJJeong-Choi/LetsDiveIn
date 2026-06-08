@@ -1,6 +1,5 @@
 /** @jsxImportSource @emotion/react */
 import AppBreadcrumb from 'components/layout-components/AppBreadcrumb';
-import IntlMessage from '../util-components/IntlMessage';
 import { css } from '@emotion/react';
 import { MEDIA_QUERIES } from 'constants/ThemeConstant';
 
@@ -17,10 +16,7 @@ export const PageHeader = ({ title, display }) => {
 					}
 				`}
 			>
-				<h3 className="mb-0 mr-3 font-weight-semibold">
-					<IntlMessage id={title? title : 'home'}/>
-				</h3>
-				<AppBreadcrumb />
+				<AppBreadcrumb fallbackTitle={title} />
 			</div>
 		)
 		: null

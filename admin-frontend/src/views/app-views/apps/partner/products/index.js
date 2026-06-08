@@ -8,6 +8,7 @@ import EllipsisDropdown from 'components/shared-components/EllipsisDropdown';
 import Flex from 'components/shared-components/Flex';
 import { cancelProductUpdate, deleteProduct, fetchMyProducts } from 'store/slices/partnerSlice';
 import PartnerService from 'services/PartnerService';
+import { resolveMediaUrl } from 'utils/resolveMediaUrl';
 import utils from 'utils';
 
 const { Option } = Select;
@@ -203,7 +204,7 @@ const PartnerProducts = () => {
 				const status = STATUS_META[record.productActiveStatus] || { label: record.productActiveStatus || '-', color: 'default' };
 				return (
 					<div className="d-flex">
-						<AvatarStatus size={72} type="square" src={record.productImageUrl} />
+						<AvatarStatus size={72} type="square" src={resolveMediaUrl(record.productImageUrl)} />
 						<div className="ml-3">
 							<div className="font-weight-semibold d-flex align-items-center" style={{ gap: 8 }}>
 								<span>{text}</span>

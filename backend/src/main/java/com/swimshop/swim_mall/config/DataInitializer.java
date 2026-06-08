@@ -115,6 +115,9 @@ public class DataInitializer implements CommandLineRunner {
     private static final String DEMO_CUSTOMER1_EMAIL = "testCustomer1@example.com";
     private static final String DEMO_CUSTOMER2_EMAIL = "testCustomer2@example.com";
     private static final String SEED_MAIN_PASSWORD = "test123!";
+    /** 리뷰 AI 분석 데모용 추가 시드 식별자 (기존 createReviews와 별도, 멱등 체크용) */
+    private static final String REVIEW_AI_SEED_MARKER = "【리뷰AI시드】";
+    private static final String REVIEW_AI_SEED_PRODUCT_NAME = "실키 핏 프로 실리콘 캡";
 
     private final AdminRepository adminRepository;
     private final PartnerRepository partnerRepository;
@@ -227,6 +230,9 @@ public class DataInitializer implements CommandLineRunner {
         } else if (reviewRepository.count() > 0) {
             log.info("리뷰가 이미 존재합니다. 건너뜁니다.");
         }
+
+        // 리뷰 AI 분석 데모: 동일 상품 구매확정 주문 3건 + 리뷰 3건 (기존 시드 유지, 부족 시에만 추가)
+        ensureReviewAiAnalysisSeeds();
 
         // 이번 기동에서 주문 시드를 새로 넣은 경우에만 등급·포인트 일괄 반영 (매 기동 재계산 방지)
         if (ranOrderSeed) {
@@ -1244,6 +1250,10 @@ public class DataInitializer implements CommandLineRunner {
      * 결제 완료 상태로 주문에 결제를 연결합니다(Payment FK + PaymentStatus.PAID).
      */
     private void linkPaidCardPayment(OrderEntity order, LocalDateTime paidAt, long amount) {
+        linkPaidCardPayment(order, paidAt, amount, "SEED-PAY-" + order.getOrderNo());
+    }
+
+    private void linkPaidCardPayment(OrderEntity order, LocalDateTime paidAt, long amount, String paymentKey) {
         PaymentEntity payment = PaymentEntity.builder()
                 .paymentAmount(amount)
                 .paymentMethod("CARD")
@@ -1251,7 +1261,7 @@ public class DataInitializer implements CommandLineRunner {
                 .paidAt(paidAt)
                 .paymentCancelYn(false)
                 .provider("seed-toss")
-                .paymentKey("SEED-PAY-" + order.getOrderNo())
+                .paymentKey(paymentKey)
                 .pgOrderId("SEED-PG-" + order.getOrderNo())
                 .status(PaymentStatus.PAID)
                 .build();
@@ -1851,6 +1861,120 @@ public class DataInitializer implements CommandLineRunner {
             }
         }
         log.info("리뷰 {}건 생성 완료 (텍스트만, 이미지 없음)", created);
+    }
+
+    /**
+     * 파트너1(스피도) 「실키 핏 프로 실리콘 캡」에 구매확정 주문 3건·리뷰 3건을 추가합니다.
+     * 기존 createOrders/createReviews 결과는 유지하며, 마커 본문 리뷰가 3건 미만일 때만 실행됩니다.
+     */
+    private void ensureReviewAiAnalysisSeeds() {
+        ProductEntity product = productRepository.findAll().stream()
+                .filter(p -> REVIEW_AI_SEED_PRODUCT_NAME.equals(p.getProductName()))
+                .findFirst()
+                .orElse(null);
+        if (product == null) {
+            log.warn("리뷰 AI 분석 시드 대상 상품을 찾을 수 없습니다: {}", REVIEW_AI_SEED_PRODUCT_NAME);
+            return;
+        }
+
+        long existingMarkerReviews = reviewRepository.findByProductNo(product.getProductNo()).stream()
+                .filter(r -> r.getReviewContent() != null && r.getReviewContent().startsWith(REVIEW_AI_SEED_MARKER))
+                .count();
+        if (existingMarkerReviews >= 3) {
+            log.info("리뷰 AI 분석 시드가 이미 있습니다. 건너뜁니다. (상품 #{})", product.getProductNo());
+            return;
+        }
+
+        CustomerEntity customer1 = customerRepository.findAll().stream()
+                .filter(c -> DEMO_CUSTOMER1_EMAIL.equals(c.getCustomerEmail()))
+                .findFirst()
+                .orElse(null);
+        CustomerEntity customer2 = customerRepository.findAll().stream()
+                .filter(c -> DEMO_CUSTOMER2_EMAIL.equals(c.getCustomerEmail()))
+                .findFirst()
+                .orElse(null);
+        if (customer1 == null || customer2 == null) {
+            log.warn("리뷰 AI 분석 시드: 데모 고객 계정이 없어 건너뜁니다.");
+            return;
+        }
+
+        OptionEntity option = pickOptionForProduct(product, 99);
+        LocalDateTime now = LocalDateTime.now();
+        CustomerEntity[] buyers = {customer1, customer2, customer1};
+        int[] ratings = {5, 3, 4};
+        String[] bodies = {
+                "머리카락이 많은 편인데도 잘 맞고, 킥 연습할 때 벗겨지지 않아요. 실리콘 소재라 착용감이 부드럽고 세척 후에도 형태가 잘 유지됩니다.",
+                "처음엔 조금 꽉 느껴졌지만 몇 번 쓰니 늘어나서 괜찮아졌어요. 색상은 사진과 비슷하고, 가격 대비 품질은 만족합니다.",
+                "수영장에서 매일 쓰는데 내구성이 좋아 보여요. 물에 젖어도 미끄러지지 않고, 머리를 단정하게 묶어 주는 느낌이 좋습니다."
+        };
+
+        int created = 0;
+        for (int i = 0; i < 3; i++) {
+            OrderItemEntity item = createReviewAiAnalysisCompletedOrder(
+                    buyers[i], product, option, now, i + 1);
+            reviewRepository.save(ReviewEntity.builder()
+                    .orderItem(item)
+                    .customer(buyers[i])
+                    .product(product)
+                    .reviewContent(REVIEW_AI_SEED_MARKER + " " + bodies[i])
+                    .reviewRating(ratings[i])
+                    .reviewCreatedAt(item.getCompletedAt().plusDays(1))
+                    .build());
+            created++;
+        }
+        log.info("리뷰 AI 분석 시드 추가: 상품 '{}' (#{}) 구매확정 주문·리뷰 {}건",
+                product.getProductName(), product.getProductNo(), created);
+    }
+
+    /** 리뷰 AI 분석 데모용 구매확정 주문 1건 (배송 완료 포함) */
+    private OrderItemEntity createReviewAiAnalysisCompletedOrder(
+            CustomerEntity customer,
+            ProductEntity product,
+            OptionEntity option,
+            LocalDateTime now,
+            int slot) {
+        Long itemPrice = Long.parseLong(product.getProductPrice());
+        Long itemTotalPrice = itemPrice;
+        int orderDaysAgo = 40 + slot;
+        int confirmedDaysAgo = 39 + slot;
+        int completedDaysAgo = 35 + slot;
+        LocalDateTime orderAt = now.minusDays(orderDaysAgo);
+
+        OrderEntity order = orderRepository.save(OrderEntity.builder()
+                .orderTotalPrice(itemTotalPrice)
+                .orderCreatedAt(orderAt)
+                .orderStatus(OrderStatus.ACTIVE)
+                .customer(customer)
+                .recipientName(customer.getCustomerName())
+                .recipientPhone("010-1234-5678")
+                .deliveryAddress("서울시 강남구 테헤란로 123")
+                .deliveryAddressDetail("456호")
+                .deliveryZipCode("06234")
+                .paymentMethod("CARD")
+                .build());
+        linkPaidCardPayment(order, orderAt, itemTotalPrice, "SEED-REVIEW-AI-" + slot);
+
+        OrderItemEntity orderItem = orderItemRepository.save(OrderItemEntity.builder()
+                .order(order)
+                .product(product)
+                .option(option)
+                .itemQuantity(1)
+                .itemPrice(itemPrice)
+                .itemTotalPrice(itemTotalPrice)
+                .isCancelled(false)
+                .confirmedAt(now.minusDays(confirmedDaysAgo))
+                .completedAt(now.minusDays(completedDaysAgo))
+                .build());
+
+        deliveryRepository.save(DeliveryEntity.builder()
+                .orderItem(orderItem)
+                .deliveryStatus(DeliveryStatus.DELIVERED)
+                .deliveryStartDate(now.minusDays(confirmedDaysAgo))
+                .deliveryEndDate(now.minusDays(completedDaysAgo + 1))
+                .deliveryTrackingNumber("TRACK-REVIEW-AI-" + slot)
+                .deliveryCourier("CJ대한통운")
+                .build());
+        return orderItem;
     }
 
     /**

@@ -3,6 +3,7 @@ import { Modal, Form, Input, InputNumber, Select, Button, Space, message, Card, 
 import { PlusOutlined, MinusCircleOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons';
 import AdminService from 'services/AdminService';
 import FileService from 'services/FileService';
+import { resolveMediaUrl } from 'utils/resolveMediaUrl';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -363,7 +364,7 @@ const ProductCreateModal = ({ visible, onCancel, onSubmit, loading, embedded = f
 					<Space align="start" wrap>
 						{productImageUrl && (
 							<img
-								src={productImageUrl}
+								src={resolveMediaUrl(productImageUrl)}
 								alt="상품 이미지 미리보기"
 								style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 6, border: '1px solid #f0f0f0' }}
 							/>
