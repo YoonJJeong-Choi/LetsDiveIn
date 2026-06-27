@@ -50,7 +50,7 @@ public class LocalFileStorageService implements FileStorageService {
     private final int maxImageDimension;
 
     public LocalFileStorageService(
-            @Value("${app.base-url:http://localhost:8080}") String publicBaseUrl,
+            @Value("${app.public-base-url:${app.base-url:http://localhost:8080}}") String publicBaseUrl,
             @Value("${app.file.upload-dir:uploads}") String uploadDir,
             @Value("${app.file.max-image-dimension:768}") int maxImageDimension,
             UploadedFileRepository uploadedFileRepository
