@@ -46,11 +46,15 @@ public class AuthController {
             session.setAttribute("customerName", res.getName());
         }
 
+        System.out.println(session.getId());
+
         return ResponseEntity.ok(res);
     }
 
     @GetMapping("/me")
     public ResponseEntity<AuthLoginResponseDto> me(HttpSession session, HttpServletRequest httpRequest) {
+        System.out.println(session.getId());
+
         AuthLoginResponseDto res = authService.getCurrentUser(session, httpRequest);
         return ResponseEntity.ok(res);
     }

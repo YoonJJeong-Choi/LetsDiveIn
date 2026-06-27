@@ -26,6 +26,7 @@ import com.swimshop.swim_mall.common.enums.AccountRole;
 import com.swimshop.swim_mall.common.enums.AuthPortal;
 import com.swimshop.swim_mall.common.error.BusinessException;
 import com.swimshop.swim_mall.common.error.ErrorCode;
+import com.swimshop.swim_mall.common.ratelimit.LoginLockoutService;
 import com.swimshop.swim_mall.customer.reopository.CustomerActivityLogRepository;
 import com.swimshop.swim_mall.customer.reopository.CustomerRepository;
 import com.swimshop.swim_mall.partner.entity.PartnerEntity;
@@ -42,6 +43,8 @@ class AuthServiceTest {
     @Mock
     private CustomerActivityLogRepository customerActivityLogRepository;
     @Mock
+    private LoginLockoutService loginLockoutService;
+    @Mock
     private AccountEntity account;
     @Mock
     private PartnerEntity partner;
@@ -56,7 +59,8 @@ class AuthServiceTest {
                 accountRepository,
                 customerRepository,
                 passwordEncoder,
-                customerActivityLogRepository);
+                customerActivityLogRepository,
+                loginLockoutService);
         ReflectionTestUtils.setField(authService, "customerFrontendUrl", "http://localhost:3000");
         ReflectionTestUtils.setField(authService, "adminFrontendUrl", "http://localhost:3001");
     }
