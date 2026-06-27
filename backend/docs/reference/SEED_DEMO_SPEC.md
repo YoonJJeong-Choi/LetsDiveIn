@@ -12,7 +12,7 @@
 | 고객1 | `testCustomer1@example.com` | 메인 테스트 (반품 신청 가능 주문) |
 | 고객2 | `testCustomer2@example.com` | 보조 |
 
-메인 테스트 3역할(관리자·파트너1·고객1) 로컬 시드 비밀번호: `test123!` (코드 상수 `SEED_MAIN_PASSWORD`, Git/README 미기재 권장)
+메인 테스트 3역할(관리자·파트너1·고객1) 로컬 시드 비밀번호: `test123!`
 
 관련: [DUMMY_DATA_RELATIONS.md](DUMMY_DATA_RELATIONS.md) (생성 순서·엔티티 관계)
 

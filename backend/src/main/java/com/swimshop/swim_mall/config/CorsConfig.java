@@ -21,7 +21,14 @@ public class CorsConfig {
         // credentials 사용 시 와일드카드 Origin 불가 → 패턴 사용
         config.setAllowedOriginPatterns(List.of(
                 "http://localhost:*",
-                "http://127.0.0.1:*"));
+                "http://127.0.0.1:*",
+                "http://43.200.179.17:3000",
+                "http://letsdivein-admin.s3-website.ap-northeast-2.amazonaws.com",
+
+                "https://wolo3.store",
+                "https://www.wolo3.store",
+                "https://admin.wolo3.store"
+        ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

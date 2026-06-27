@@ -1,7 +1,7 @@
 import Footer1 from "@/components/footers/Footer1";
 import Header1 from "@/components/headers/Header1";
 import SearchProducts from "@/components/products/SearchProducts";
-import React from "react";
+import React, { Suspense } from "react";
 
 export const metadata = {
   title: "검색 결과 || Let’s Dive In",
@@ -24,7 +24,9 @@ export default function SearchResultPage() {
           </div>
         </div>
       </div>
-      <SearchProducts />
+      <Suspense fallback={<div>Loading...</div>}>
+        <SearchProducts />
+      </Suspense>
 
       <Footer1 />
     </>

@@ -2,6 +2,23 @@
 
 수영 용품 멀티 벤더 쇼핑몰 모노레포입니다. 고객몰(Next.js), 관리자·파트너 백오피스(React), API(Spring Boot)로 구성됩니다.
 
+## 서비스 주소
+
+| 구분 | URL |
+|------|-----|
+| 고객몰 | https://wolo3.store |
+| 관리자·파트너 | https://admin.wolo3.store |
+
+## 테스트 계정
+
+배포 환경에서 아래 계정으로 로그인해 동작을 확인할 수 있습니다.
+
+| 역할 | 접속 URL | 이메일 | 비밀번호 |
+|------|----------|--------|----------|
+| 고객 | https://wolo3.store | testCustomer1@example.com | test123! |
+| 관리자 | https://admin.wolo3.store | testAdmin@example.com | test123! |
+| 파트너 | https://admin.wolo3.store | testPartner1@example.com | test123! |
+
 | 구분 | 기술 | 로컬 포트 |
 |------|------|-----------|
 | 고객몰 | Next.js, React | 3000 |
@@ -24,7 +41,7 @@ cp .env.example .env   # Windows: copy .env.example .env
 ```
 
 - 환경 변수 키 목록: [`backend/.env.example`](backend/.env.example) (공개 가능한 template, **실제 값은 `.env`에만**)
-- 시드 데이터: `app.data.init.enabled=true` + 빈 DB 기동 시 자동 생성. 계정·시나리오는 [시드 스펙](backend/docs/reference/SEED_DEMO_SPEC.md) 참고 (데모 비밀번호는 Git/README에 넣지 않음)
+- 시드 데이터: `app.data.init.enabled=true` + 빈 DB 기동 시 자동 생성. 계정·시나리오는 [시드 스펙](backend/docs/reference/SEED_DEMO_SPEC.md) 참고
 
 ### 3. 프론트엔드
 
