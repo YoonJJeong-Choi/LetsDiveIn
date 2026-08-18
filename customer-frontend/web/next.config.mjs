@@ -12,15 +12,7 @@ const nextConfig = {
     quietDeps: true, // This will silence deprecation warnings
     silenceDeprecations: ["legacy-js-api"],
   },
-  async redirects() {
-    return [
-      {
-        source: "/home-:slug*",
-        destination: "/",
-        permanent: false,
-      },
-    ];
-  },
+
   /** 브라우저가 상대경로 /api/* 로 호출할 때만 프록시 (NEXT_PUBLIC_API_URL 미설정 시) */
   async rewrites() {
     return [
