@@ -116,7 +116,7 @@ public class DataInitializer implements CommandLineRunner {
     private static final String DEMO_CUSTOMER2_EMAIL = "testCustomer2@example.com";
     private static final String SEED_MAIN_PASSWORD = "test123!";
     /** 리뷰 AI 분석 데모용 추가 시드 식별자 (기존 createReviews와 별도, 멱등 체크용) */
-    private static final String REVIEW_AI_SEED_MARKER = "【리뷰AI시드】";
+//    private static final String REVIEW_AI_SEED_MARKER = "【리뷰`AI시드】";
     private static final String REVIEW_AI_SEED_PRODUCT_NAME = "실키 핏 프로 실리콘 캡";
 
     private final AdminRepository adminRepository;
@@ -1877,10 +1877,10 @@ public class DataInitializer implements CommandLineRunner {
             return;
         }
 
-        long existingMarkerReviews = reviewRepository.findByProductNo(product.getProductNo()).stream()
-                .filter(r -> r.getReviewContent() != null && r.getReviewContent().startsWith(REVIEW_AI_SEED_MARKER))
+        long existingSeedReviews = reviewRepository.findByProductNo(product.getProductNo()).stream()
+                .filter(this::isReviewAiSeed)
                 .count();
-        if (existingMarkerReviews >= 3) {
+        if (existingSeedReviews >= 3) {
             log.info("리뷰 AI 분석 시드가 이미 있습니다. 건너뜁니다. (상품 #{})", product.getProductNo());
             return;
         }
@@ -1916,7 +1916,7 @@ public class DataInitializer implements CommandLineRunner {
                     .orderItem(item)
                     .customer(buyers[i])
                     .product(product)
-                    .reviewContent(REVIEW_AI_SEED_MARKER + " " + bodies[i])
+                    .reviewContent(bodies[i])
                     .reviewRating(ratings[i])
                     .reviewCreatedAt(item.getCompletedAt().plusDays(1))
                     .build());
@@ -1924,6 +1924,15 @@ public class DataInitializer implements CommandLineRunner {
         }
         log.info("리뷰 AI 분석 시드 추가: 상품 '{}' (#{}) 구매확정 주문·리뷰 {}건",
                 product.getProductName(), product.getProductNo(), created);
+    }
+
+    /** 리뷰 AI 분석 데모 시드로 만든 리뷰인지 판별 (결제 키 기준) */
+    private boolean isReviewAiSeed(ReviewEntity review) {
+        if (review.getOrderItem() == null) return false;
+        OrderEntity order = review.getOrderItem().getOrder();
+        if (order == null || order.getPayment() == null) return false;
+        String key = order.getPayment().getPaymentKey();
+        return key != null && key.startsWith("SEED-REVIEW-AI-");
     }
 
     /** 리뷰 AI 분석 데모용 구매확정 주문 1건 (배송 완료 포함) */
