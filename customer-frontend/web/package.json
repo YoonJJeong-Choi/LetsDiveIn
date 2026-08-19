@@ -19,6 +19,6 @@
     "react-dom": "19.0.0",
     "react-range-slider-input": "^3.0.7",
     "sass": "^1.82.0",
-    "swiper": "^11.1.15"
+    "swiper": "^14.1.0"
   }
 }
