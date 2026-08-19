@@ -60,3 +60,11 @@
 | [archive/DELIVERY_IMPLEMENTATION_PLAN.md](archive/DELIVERY_IMPLEMENTATION_PLAN.md) | 배송 구현 계획(이력) |
 | [archive/DAY1-엔티티-관계-점검.md](archive/DAY1-엔티티-관계-점검.md) | 초기 엔티티 점검 메모 |
 | [archive/PartnerEntity-불필요한-컬럼-검토.md](archive/PartnerEntity-불필요한-컬럼-검토.md) | Partner 엔티티 컬럼 일회성 검토 |
+
+
+### `incidents/`
+## 운영 기록
+
+[incidents/incident-report-20260628.md](incidents/incident-report-20260628.md)
+
+2026년 6월, 배포 서버가 Next.js RCE 웜 감염 사고 조사 재구축
