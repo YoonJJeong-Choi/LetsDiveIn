@@ -179,8 +179,12 @@ cat xmrig-6.21.0/config.json
 ```
 
 ```json
-"url": "donate.v2.xmrig.com:3333",
-"user": "YOUR_WALLET_ADDRESS"
+{
+  "pools": [{
+    "url": "donate.v2.xmrig.com:3333",
+    "user": "YOUR_WALLET_ADDRESS"
+  }]
+}
 ```
 
 - 지갑 주소가 배포판 기본값 그대로 — **채굴은 실제로 이루어지지 않았다**
@@ -307,6 +311,36 @@ nginx 로그의 `POST /` 공격이 08:58:19~08:59:14에 집중되고, XMRig 파�
 ---
 
 ## 조치 사항
+
+### 즉시 조치 (7/4)
+- 예산 알람으로 이상 인지 후 인스턴스 중지
+- 보안 그룹 아웃바운드 전체 차단, 인바운드 SSH만 허용
+- EBS 스냅샷으로 증거 보존
+
+### 자격 증명 회전
+- Neon DB: 신규 프로젝트 생성으로 접속 정보 완전 분리
+- OpenAI API 키 재발급 (잔액·자동충전 확인, 도용 흔적 없음)
+- Gmail 앱 비밀번호 재발급
+- 파일 서명 시크릿 재생성
+
+### 재구축
+- 신규 EC2 (Amazon Linux 2023, gp3 15GB, 스왑 2GB)
+- **Next.js 15.1.6 → 15.5.23 업그레이드** (근본 원인 제거)
+- 코드는 기존 서버에서 복사하지 않고 Git 저장소에서 신규 클론 후 빌드
+- 프론트엔드 의존성 취약점 정리 (10건 → 3건, 잔여는 Next.js 16 필요)
+- Let's Encrypt 인증서 적용, HTTP→HTTPS 리다이렉트 및 자동 갱신 설정
+- 침해 인스턴스 종료 (스냅샷은 보존)
+
+### 재발 방지 — 탐지 체계 구축
+| 도구 | 감지 대상 |
+|---|---|
+| CloudWatch `disk_used_percent` > 80% | 로그 폭증 (이번 사고의 직접 원인) |
+| CloudWatch `CPUUtilization` > 90% (15분) | 채굴 프로세스 |
+| CloudWatch `NetworkOut` > 1GB/시간 | 스캐너·데이터 유출 |
+| Cost Anomaly Detection > $1 | 비정상 비용 증가 |
+| AWS Budgets 85%/100% | 월간 비용 추세 |
+
+사고 당시에는 예산 알람 1종만 운영 중이었다.
 
 ### 즉시 조치
 
